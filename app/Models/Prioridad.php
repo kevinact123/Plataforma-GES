@@ -3,7 +3,20 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Prioridad extends Model
 {
+    protected $table = 'prioridades';
+
+    protected $primaryKey = 'id_prioridad';
+
+    public $timestamps = false;
+
+    protected $guarded = [];
+
+    public function registrosGes(): HasMany
+    {
+        return $this->hasMany(RegistroGes::class, 'id_prioridad', 'id_prioridad');
+    }
 }
