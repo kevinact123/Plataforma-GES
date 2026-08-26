@@ -9,11 +9,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable;
+    use HasApiTokens, HasFactory, Notifiable;
 
     protected $table = 'usuarios';
 
@@ -23,7 +24,15 @@ class User extends Authenticatable
 
     public const UPDATED_AT = null;
 
-    protected $guarded = [];
+    protected $fillable = [
+        'nombre',
+        'apellido',
+        'username',
+        'password',
+        'id_rol',
+        'activo',
+        'ultimo_acceso',
+    ];
 
     protected $hidden = [
         'password',
@@ -74,5 +83,75 @@ class User extends Authenticatable
     public function historialRegistros(): HasMany
     {
         return $this->hasMany(HistorialRegistro::class, 'id_usuario', 'id_usuario');
+    }
+
+    public function auditoriaAccesos(): HasMany
+    {
+        return $this->hasMany(AuditoriaAcceso::class, 'id_usuario', 'id_usuario');
+    }
+
+    public function hasRole(string|array $roles): bool
+    {
+        $roles = array_map('strtolower', is_array($roles) ? $roles : [$roles]);
+        $nombre = strtolower((string) $this->rol?->nombre);
+
+        return in_array($nombre, $roles, true);
+    }
+
+    public function esAdmin(): bool
+    {
+        return $this->hasRole(['admin', 'administrador', 'superadmin']) || ($this->rol?->esAdmin() ?? false);
+    }
+
+    public function puedeVerPatologia(Patologia $patologia): bool
+    {
+        if (!$this->activo || !$patologia->activo) {
+            return false;
+        }
+
+        if ($this->esAdmin()) {
+            return true;
+        }
+
+        if (!$patologia->confidencial) {
+            return true;
+        }
+
+        return $this->tienePermisoPatologia($patologia, 'puede_ver');
+    }
+
+    public function puedeEditarPatologia(Patologia $patologia): bool
+    {
+        if (!$this->activo || !$patologia->activo) {
+            return false;
+        }
+
+        if ($this->esAdmin()) {
+            return true;
+        }
+
+        return $this->tienePermisoPatologia($patologia, 'puede_editar');
+    }
+
+    public function puedeAsignarPatologia(Patologia $patologia): bool
+    {
+        if (!$this->activo || !$patologia->activo) {
+            return false;
+        }
+
+        if ($this->esAdmin()) {
+            return true;
+        }
+
+        return $this->tienePermisoPatologia($patologia, 'puede_asignar');
+    }
+
+    private function tienePermisoPatologia(Patologia $patologia, string $permiso): bool
+    {
+        return $this->activo
+            && (bool) $this->permisosPatologia()
+                ->where('id_patologia', $patologia->getKey())
+                ->where($permiso, true)
+                ->exists();
     }
 }

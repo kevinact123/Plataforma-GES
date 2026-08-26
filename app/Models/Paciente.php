@@ -15,7 +15,15 @@ class Paciente extends Model
 
     public const UPDATED_AT = null;
 
-    protected $guarded = [];
+    protected $fillable = [
+        'rut',
+        'nombre',
+        'apellido_paterno',
+        'apellido_materno',
+        'fecha_nacimiento',
+        'sexo',
+        'activo',
+    ];
 
     protected function casts(): array
     {

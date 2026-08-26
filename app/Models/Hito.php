@@ -13,7 +13,15 @@ class Hito extends Model
 
     public $timestamps = false;
 
-    protected $guarded = [];
+    protected $fillable = [
+        'id_registro',
+        'id_usuario',
+        'nombre',
+        'estado',
+        'fecha_inicio',
+        'fecha_completado',
+        'observacion',
+    ];
 
     protected function casts(): array
     {

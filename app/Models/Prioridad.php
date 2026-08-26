@@ -13,7 +13,11 @@ class Prioridad extends Model
 
     public $timestamps = false;
 
-    protected $guarded = [];
+    protected $fillable = [
+        'nombre',
+        'nivel',
+        'descripcion',
+    ];
 
     public function registrosGes(): HasMany
     {

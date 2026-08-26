@@ -12,7 +12,11 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        $middleware->alias([
+            'patologia.confidencial' => App\Http\Middleware\CheckPatologiaConfidencial::class,
+            'patologia.autorizacion' => App\Http\Middleware\AuthorizePatologiaAccess::class,
+            'admin' => App\Http\Middleware\EnsureAdmin::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

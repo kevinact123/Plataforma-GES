@@ -21,6 +21,26 @@ Laravel is a web application framework with expressive, elegant syntax. We belie
 
 Laravel is accessible, powerful, and provides tools required for large, robust applications.
 
+## API de complejidad
+
+Los endpoints requieren autenticación Sanctum y exponen la complejidad como una métrica de carga laboral de las digitadoras. No reemplaza ni modifica la prioridad médica del registro GES.
+
+| Método | Endpoint | Descripción |
+| --- | --- | --- |
+| GET | `/api/complejidad` | Consulta las evaluaciones registradas. |
+| GET | `/api/complejidad/promedio-por-tipo` | Promedio y cantidad de evaluaciones por tipo de registro. |
+| GET | `/api/complejidad/operadores` | Promedio, puntaje acumulado y carga activa por digitadora. |
+| GET | `/api/complejidad/patologias` | Promedio de complejidad de los tipos asociados a cada patología. |
+
+Las respuestas usan el formato `{ "data": [...] }`. Cada elemento de `/api/complejidad/operadores` incluye:
+
+- `promedio`: promedio de puntaje evaluado para la digitadora.
+- `total_puntaje`: suma de sus puntajes de complejidad.
+- `carga_actual`: cantidad de asignaciones activas.
+- `carga_ponderada`: `total_puntaje + carga_actual`.
+
+La sugerencia de asignación usa la carga ponderada junto con factores operativos del trabajo. El campo `prioridad` solo participa como factor independiente de la sugerencia y no se mezcla con la complejidad clínica.
+
 ## Learning Laravel
 
 Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
