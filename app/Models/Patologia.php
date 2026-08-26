@@ -14,7 +14,13 @@ class Patologia extends Model
 
     public $timestamps = false;
 
-    protected $guarded = [];
+    protected $fillable = [
+        'numero_ges',
+        'nombre',
+        'descripcion',
+        'confidencial',
+        'activo',
+    ];
 
     protected function casts(): array
     {

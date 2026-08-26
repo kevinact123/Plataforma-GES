@@ -13,7 +13,16 @@ class HistorialRegistro extends Model
 
     public $timestamps = false;
 
-    protected $guarded = [];
+    protected $fillable = [
+        'id_registro',
+        'id_usuario',
+        'accion',
+        'campo_modificado',
+        'valor_anterior',
+        'valor_nuevo',
+        'fecha',
+        'ip',
+    ];
 
     protected function casts(): array
     {

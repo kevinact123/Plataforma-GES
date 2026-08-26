@@ -13,7 +13,13 @@ class ComplejidadPatologia extends Model
 
     public $timestamps = false;
 
-    protected $guarded = [];
+    protected $fillable = [
+        'id_patologia',
+        'factor',
+        'nivel',
+        'motivo',
+        'activo',
+    ];
 
     protected function casts(): array
     {

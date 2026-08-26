@@ -13,7 +13,11 @@ class TipoRegistro extends Model
 
     public $timestamps = false;
 
-    protected $guarded = [];
+    protected $fillable = [
+        'nombre',
+        'descripcion',
+        'activo',
+    ];
 
     protected function casts(): array
     {

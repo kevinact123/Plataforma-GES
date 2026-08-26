@@ -13,7 +13,13 @@ class PermisoPatologia extends Model
 
     public $timestamps = false;
 
-    protected $guarded = [];
+    protected $fillable = [
+        'id_usuario',
+        'id_patologia',
+        'puede_ver',
+        'puede_editar',
+        'puede_asignar',
+    ];
 
     protected function casts(): array
     {

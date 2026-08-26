@@ -13,7 +13,16 @@ class Asignacion extends Model
 
     public $timestamps = false;
 
-    protected $guarded = [];
+    protected $fillable = [
+        'id_registro',
+        'id_usuario',
+        'asignado_por',
+        'fecha_asignacion',
+        'fecha_inicio',
+        'fecha_finalizacion',
+        'estado',
+        'observacion',
+    ];
 
     protected function casts(): array
     {

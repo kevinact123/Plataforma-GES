@@ -13,7 +13,13 @@ class ComplejidadRegistro extends Model
 
     public $timestamps = false;
 
-    protected $guarded = [];
+    protected $fillable = [
+        'id_usuario',
+        'id_tipo_registro',
+        'puntaje',
+        'observacion',
+        'fecha_evaluacion',
+    ];
 
     protected function casts(): array
     {
