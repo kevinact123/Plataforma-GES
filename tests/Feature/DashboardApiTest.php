@@ -214,6 +214,27 @@ class DashboardApiTest extends TestCase
             ->assertJsonFragment(['label' => 'Patología A']);
 
         $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/dashboard/resumen?mes=2026-08')
+            ->assertOk()
+            ->assertJsonPath('total_registros', 3);
+
+        $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/dashboard/resumen?mes=2026-07')
+            ->assertOk()
+            ->assertJsonPath('total_registros', 0)
+            ->assertJsonPath('registros_pendientes', 0);
+
+        $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/dashboard/distribuciones?mes=2026-07')
+            ->assertOk()
+            ->assertJsonPath('prioridades', [])
+            ->assertJsonPath('patologias', []);
+
+        $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/dashboard/resumen?mes=agosto')
+            ->assertStatus(422);
+
+        $this->actingAs($admin, 'sanctum')
             ->getJson('/api/dashboard/carga-operadores')
             ->assertOk()
             ->assertJsonFragment(['nombre' => 'Carmen Test', 'total_activas' => 1])
@@ -273,6 +294,7 @@ class DashboardApiTest extends TestCase
             $table->string('apellido_paterno');
             $table->string('apellido_materno')->nullable();
             $table->date('fecha_nacimiento')->nullable();
+            $table->dateTime('hora_cierre_dau')->nullable();
             $table->string('sexo')->nullable();
             $table->boolean('activo')->default(true);
             $table->timestamp('fecha_registro')->nullable();

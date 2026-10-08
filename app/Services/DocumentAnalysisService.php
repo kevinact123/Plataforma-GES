@@ -14,7 +14,7 @@ class DocumentAnalysisService
         'numero_dau' => ['numero_dau', 'numero dau', 'n° dau', 'n dau', 'dau'],
         'apellido_paterno' => ['apellido_paterno', 'apellido paterno', 'primer_apellido', 'a paterno', 'apaterno'],
         'apellido_materno' => ['apellido_materno', 'apellido materno', 'segundo_apellido', 'a materno', 'amaterno'],
-        'fecha_nacimiento' => ['fecha_nacimiento', 'fecha nacimiento', 'fecha de nacimiento', 'fecha_nac', 'f nacimiento', 'f.nacimiento', 'nacimiento'],
+        'hora_cierre_dau' => ['hora_cierre_dau', 'hora cierre dau', 'hora de cierre dau', 'hora cierre'],
         'sexo' => ['sexo', 'genero', 'género'],
         'domicilio' => ['domicilio', 'direccion', 'dirección'],
         'atencion' => ['atencion', 'atención'],
@@ -57,7 +57,7 @@ class DocumentAnalysisService
                 'nombre' => ['nullable', 'string', 'max:100'],
                 'apellido_paterno' => ['nullable', 'string', 'max:100'],
                 'apellido_materno' => ['nullable', 'string', 'max:100'],
-                'fecha_nacimiento' => ['nullable', 'date'],
+                'hora_cierre_dau' => ['nullable', 'date'],
                 'sexo' => ['nullable', 'string', 'max:20'],
                 'domicilio' => ['nullable', 'string', 'max:255'],
                 'atencion' => ['nullable', 'string', 'max:100'],
@@ -337,7 +337,11 @@ class DocumentAnalysisService
             return $this->normalizeRut($value);
         }
 
-        if (! in_array($key, ['fecha_nacimiento', 'fecha_ingreso', 'fecha_limite'], true)) {
+        if ($key === 'hora_cierre_dau') {
+            return $this->normalizeDateTimeValue($value);
+        }
+
+        if (! in_array($key, ['fecha_ingreso', 'fecha_limite'], true)) {
             return $value;
         }
 
@@ -349,6 +353,23 @@ class DocumentAnalysisService
             $date = new \DateTimeImmutable('1899-12-30');
 
             return $date->modify('+'.(int) $value.' days')->format('Y-m-d');
+        }
+
+        return $value;
+    }
+
+    private function normalizeDateTimeValue(string $value): string
+    {
+        $value = trim($value);
+
+        if (preg_match('/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})(?:[ T]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/', $value, $m)) {
+            return sprintf('%04d-%02d-%02d %02d:%02d:%02d', $m[3], $m[2], $m[1], $m[4] ?? 0, $m[5] ?? 0, $m[6] ?? 0);
+        }
+
+        if (is_numeric($value) && (float) $value > 0 && (float) $value < 100000) {
+            $seconds = (int) round(((float) $value) * 86400);
+
+            return (new \DateTimeImmutable('1899-12-30 00:00:00'))->modify("+{$seconds} seconds")->format('Y-m-d H:i:s');
         }
 
         return $value;

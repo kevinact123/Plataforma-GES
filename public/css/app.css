@@ -45,6 +45,13 @@
 
 /* Modo oscuro: Bootstrap 5.3 aplica data-bs-theme; aquí se ajustan los colores propios y las clases fijas. */
 [data-bs-theme="dark"] body { background-color: var(--bs-body-bg); }
+.card.ges-total-records-card {
+    border: 4px solid #000;
+}
+.ges-total-records-card-icon { color: var(--bs-body-color); }
+[data-bs-theme="dark"] .card.ges-total-records-card {
+    border-color: #fff;
+}
 [data-bs-theme="dark"] .sidebar-column,
 [data-bs-theme="dark"] .sidebar { background-color: #161b22; }
 [data-bs-theme="dark"] .sidebar .nav-link:hover,
@@ -59,7 +66,50 @@
 [data-bs-theme="dark"] .modal-header,
 [data-bs-theme="dark"] .modal-footer { background-color: var(--bs-tertiary-bg) !important; color: var(--bs-body-color); }
 [data-bs-theme="dark"] .border-light { border-color: var(--bs-border-color) !important; }
-[data-bs-theme="dark"] .bg-warning-subtle { color: var(--bs-body-color); }
+[data-bs-theme="dark"] .bg-warning-subtle,
+[data-bs-theme="dark"] .bg-danger-subtle { color: var(--bs-body-color); }
+[data-bs-theme="dark"] .btn-outline-primary {
+    color: #fff;
+    border-color: #0d6efd;
+    background-color: #0d6efd;
+}
+[data-bs-theme="dark"] .btn-outline-secondary {
+    color: #fff;
+    border-color: #6c757d;
+    background-color: #6c757d;
+}
+[data-bs-theme="dark"] .btn-outline-success {
+    color: #fff;
+    border-color: #198754;
+    background-color: #198754;
+}
+[data-bs-theme="dark"] .btn-outline-danger {
+    color: #fff;
+    border-color: #dc3545;
+    background-color: #dc3545;
+}
+[data-bs-theme="dark"] .btn-outline-warning {
+    color: #212529;
+    border-color: #ffc107;
+    background-color: #ffc107;
+}
+[data-bs-theme="dark"] .btn-outline-info {
+    color: #212529;
+    border-color: #0dcaf0;
+    background-color: #0dcaf0;
+}
+[data-bs-theme="dark"] .btn-outline-primary:hover,
+[data-bs-theme="dark"] .btn-outline-primary:focus-visible { color: #fff; background-color: #0d6efd; border-color: #0d6efd; }
+[data-bs-theme="dark"] .btn-outline-secondary:hover,
+[data-bs-theme="dark"] .btn-outline-secondary:focus-visible { color: #fff; background-color: #6c757d; border-color: #6c757d; }
+[data-bs-theme="dark"] .btn-outline-success:hover,
+[data-bs-theme="dark"] .btn-outline-success:focus-visible { color: #fff; background-color: #198754; border-color: #198754; }
+[data-bs-theme="dark"] .btn-outline-danger:hover,
+[data-bs-theme="dark"] .btn-outline-danger:focus-visible { color: #fff; background-color: #dc3545; border-color: #dc3545; }
+[data-bs-theme="dark"] .btn-outline-warning:hover,
+[data-bs-theme="dark"] .btn-outline-warning:focus-visible { color: #212529; background-color: #ffc107; border-color: #ffc107; }
+[data-bs-theme="dark"] .btn-outline-info:hover,
+[data-bs-theme="dark"] .btn-outline-info:focus-visible { color: #212529; background-color: #0dcaf0; border-color: #0dcaf0; }
 [data-bs-theme="dark"] .table-light {
     --bs-table-bg: var(--bs-tertiary-bg);
     --bs-table-color: var(--bs-body-color);

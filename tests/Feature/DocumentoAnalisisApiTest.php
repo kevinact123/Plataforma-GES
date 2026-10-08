@@ -30,7 +30,7 @@ class DocumentoAnalisisApiTest extends TestCase
         $response = $this->actingAs($user, 'sanctum')->post('/api/documentacion/ingerir', [
             'documento' => UploadedFile::fake()->createWithContent(
                 'paciente.csv',
-                "rut: 11.111.111-1\nnombre: Ana\nfecha_nacimiento: 1990-01-01\nfecha_ingreso: 2026-09-14",
+                "rut: 11.111.111-1\nnombre: Ana\nhora_cierre_dau: 2026-09-01 07:58:00\nfecha_ingreso: 2026-09-14",
             ),
         ]);
         $response->assertCreated()
@@ -137,8 +137,8 @@ class DocumentoAnalisisApiTest extends TestCase
             'activo' => true,
         ]);
 
-        $headers = 'N° DAU,A.PATERNO,A.MATERNO,DOMICILIO,ATENCION,F.NACIMIENTO,PREVISION,FORMA PAGO,INGRESO,EDAD,CONSULTORIO,REPORTE,GES,DESTINO,DESC.CIE10,SERVICIO EGRE';
-        $values = '12345,Pérez,López,Calle 1,Urgencia,01/02/1980,Fonasa,Gratuito,2026-09-22,46,Central,Reporte,GES,Hospital,CIE10,Alta';
+        $headers = 'N° DAU,A.PATERNO,A.MATERNO,DOMICILIO,ATENCION,HORA CIERRE DAU,PREVISION,FORMA PAGO,INGRESO,EDAD,CONSULTORIO,REPORTE,GES,DESTINO,DESC.CIE10,SERVICIO EGRE';
+        $values = '12345,Pérez,López,Calle 1,Urgencia,01-09-2026 07:58,Fonasa,Gratuito,2026-09-22,46,Central,Reporte,GES,Hospital,CIE10,Alta';
         $response = $this->actingAs($user, 'sanctum')->postJson('/api/documentacion/analizar', [
             'documento' => UploadedFile::fake()->createWithContent('dau.csv', $headers . "\n" . $values),
         ]);
@@ -146,7 +146,7 @@ class DocumentoAnalisisApiTest extends TestCase
         $response->assertOk()
             ->assertJsonPath('data.datos.numero_dau', '12345')
             ->assertJsonPath('data.datos.apellido_paterno', 'Pérez')
-            ->assertJsonPath('data.datos.fecha_nacimiento', '1980-02-01')
+            ->assertJsonPath('data.datos.hora_cierre_dau', '2026-09-01 07:58:00')
             ->assertJsonPath('data.datos_ignorados', []);
     }
 
@@ -162,7 +162,7 @@ class DocumentoAnalisisApiTest extends TestCase
             'id_rol' => $role->id_rol,
             'activo' => true,
         ]);
-        $content = "rut: 11.111.111-1\nnombre: Ana\nfecha_nacimiento: 1990-01-01";
+        $content = "rut: 11.111.111-1\nnombre: Ana\nhora_cierre_dau: 2026-09-01 07:58:00";
 
         $this->actingAs($user, 'sanctum')->post('/api/documentacion/ingerir', [
             'documento' => UploadedFile::fake()->createWithContent('padron.csv', $content),
@@ -216,7 +216,7 @@ class DocumentoAnalisisApiTest extends TestCase
         $response = $this->actingAs($user, 'sanctum')->postJson('/api/documentacion/analizar', [
             'documento' => UploadedFile::fake()->createWithContent(
                 'paciente.csv',
-                "rut: 11.111.111-1\nnombre: Ana\nfecha_nacimiento: 1990-01-01\ncampo_externo: ignorar\nfecha_ingreso: 2026-09-14",
+                "rut: 11.111.111-1\nnombre: Ana\nhora_cierre_dau: 2026-09-01 07:58:00\ncampo_externo: ignorar\nfecha_ingreso: 2026-09-14",
             ),
         ]);
 
@@ -246,7 +246,7 @@ class DocumentoAnalisisApiTest extends TestCase
         $response = $this->actingAs($user, 'sanctum')->postJson('/api/documentacion/analizar', [
             'documento' => UploadedFile::fake()->createWithContent(
                 'paciente.csv',
-                "rut,nombre,fecha_nacimiento,fecha_ingreso\n11.111.111-1,Ana,1990-01-01,fecha-invalida",
+                "rut,nombre,hora_cierre_dau,fecha_ingreso\n11.111.111-1,Ana,2026-09-01 07:58:00,fecha-invalida",
             ),
         ]);
 

@@ -26,7 +26,7 @@
             <div class="col-12 col-md-4"><label class="form-label" for="new-patient-name">Nombre</label><input class="form-control" id="new-patient-name" name="nombre" maxlength="100" required></div>
             <div class="col-12 col-md-4"><label class="form-label" for="new-patient-lastname">Apellido paterno</label><input class="form-control" id="new-patient-lastname" name="apellido_paterno" maxlength="100" required></div>
             <div class="col-12 col-md-4"><label class="form-label" for="new-patient-mother-lastname">Apellido materno</label><input class="form-control" id="new-patient-mother-lastname" name="apellido_materno" maxlength="100"></div>
-            <div class="col-12 col-md-4"><label class="form-label" for="new-patient-birthdate">Fecha de nacimiento</label><input class="form-control" id="new-patient-birthdate" name="fecha_nacimiento" type="date"></div>
+            <div class="col-12 col-md-4"><label class="form-label" for="new-patient-birthdate">Hora de cierre DAU</label><input class="form-control" id="new-patient-birthdate" name="hora_cierre_dau" type="datetime-local"></div>
             <div class="col-12 col-md-4"><label class="form-label" for="new-patient-sex">Sexo</label><select class="form-select" id="new-patient-sex" name="sexo"><option value="">Seleccionar</option><option value="F">Femenino</option><option value="M">Masculino</option><option value="O">Otro</option></select></div>
             <div class="col-12"><button class="btn btn-primary" id="save-patient" type="submit"><i class="bi bi-person-plus me-1" aria-hidden="true"></i>Guardar paciente</button></div>
         </form>
@@ -67,7 +67,7 @@
                     <th scope="col"><input class="form-check-input" id="select-all-patients" type="checkbox" aria-label="Seleccionar todos los pacientes de la página"></th>
                     <th scope="col">RUT</th>
                     <th scope="col">Paciente</th>
-                    <th scope="col">Fecha de nacimiento</th>
+                    <th scope="col">Hora de cierre DAU</th>
                     <th scope="col">Registros GES</th>
                     <th scope="col" class="text-end">Acciones</th>
                 </tr>
@@ -125,6 +125,13 @@
         return new Intl.DateTimeFormat('es-CL').format(new Date(`${value}T00:00:00`));
     }
 
+    function formatDateTime(value) {
+        if (!value) return '-';
+        const date = new Date(String(value).replace(' ', 'T'));
+        if (Number.isNaN(date.getTime())) return '-';
+        return new Intl.DateTimeFormat('es-CL', { dateStyle: 'short', timeStyle: 'short', hour12: false }).format(date);
+    }
+
     function authHeaders() {
         return { Accept: 'application/json', Authorization: `Bearer ${token}` };
     }
@@ -151,7 +158,7 @@
                 <td><input class="form-check-input patient-selection" type="checkbox" value="${patient.id_paciente}" aria-label="Seleccionar paciente ${escapeHtml(fullName)}"></td>
                 <td class="fw-semibold">${escapeHtml(patient.rut)}</td>
                 <td>${escapeHtml(fullName)}</td>
-                <td>${escapeHtml(formatDate(patient.fecha_nacimiento))}</td>
+                <td>${escapeHtml(formatDateTime(patient.hora_cierre_dau))}</td>
                 <td><span class="badge text-bg-primary" title="${records.length} registro(s) GES y ${documentCount} documento(s)">${records.length + documentCount}</span></td>
                 <td class="text-end">
                     <div class="btn-group btn-group-sm" role="group">
@@ -221,7 +228,7 @@
             document.getElementById('patient-modal-title').textContent = fullName;
             document.getElementById('patient-modal-rut').textContent = `RUT ${patient.rut}`;
             body.innerHTML = `<div class="row g-3 mb-4">
-                <div class="col-sm-4"><div class="small text-muted">Fecha de nacimiento</div><div class="fw-semibold">${escapeHtml(formatDate(patient.fecha_nacimiento))}</div></div>
+                <div class="col-sm-4"><div class="small text-muted">Hora de cierre DAU</div><div class="fw-semibold">${escapeHtml(formatDateTime(patient.hora_cierre_dau))}</div></div>
                 <div class="col-sm-4"><div class="small text-muted">Sexo</div><div class="fw-semibold">${escapeHtml(patient.sexo)}</div></div>
                 <div class="col-sm-4"><div class="small text-muted">Estado</div><div class="fw-semibold">${patient.activo ? 'Activo' : 'Inactivo'}</div></div>
             </div>

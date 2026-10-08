@@ -9,7 +9,13 @@
         <h1 class="h2 mb-1"><i class="bi bi-speedometer2 me-2" aria-hidden="true"></i>Menú principal</h1>
         <p class="text-muted mb-0">Estado actual de la gestión GES y carga de trabajo.</p>
     </div>
-    <button class="btn btn-outline-secondary" id="refresh-dashboard" type="button"><i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>Actualizar</button>
+    <div class="d-flex flex-wrap align-items-end gap-2">
+        <div>
+            <label class="form-label small text-muted mb-1" for="dashboard-month">Mes</label>
+            <input class="form-control" type="month" id="dashboard-month" aria-label="Mes a visualizar">
+        </div>
+        <button class="btn btn-outline-secondary" id="refresh-dashboard" type="button"><i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>Actualizar</button>
+    </div>
 </div>
 
 <div id="dashboard-error" class="alert alert-danger d-none" role="alert"></div>
@@ -43,6 +49,9 @@
     const dashboardLoading = document.getElementById('dashboard-loading');
     const dashboardError = document.getElementById('dashboard-error');
     const refreshButton = document.getElementById('refresh-dashboard');
+    const monthInput = document.getElementById('dashboard-month');
+    const today = new Date();
+    monthInput.value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
     let dashboardCharts = [];
     let dashboardRequestInProgress = false;
 
@@ -71,7 +80,7 @@
         const chart = new Chart(canvas, {
             type,
             data: { labels, datasets: [{ data: values, backgroundColor: colors, borderWidth: 0 }] },
-            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: type === 'bar' ? 'bottom' : 'right' } }, scales: type === 'bar' ? { y: { beginAtZero: true, ticks: { precision: 0 } } } : {} },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: type !== 'bar', position: 'right' } }, scales: type === 'bar' ? { y: { beginAtZero: true, ticks: { precision: 0 } } } : {} },
         });
         dashboardCharts.push(chart);
     }
@@ -85,7 +94,12 @@
             ['registros_completados', 'Completados', 'check2-circle', 'success'],
             ['registros_sin_asignar', 'Sin asignar', 'person-exclamation', 'danger'],
         ];
-        document.getElementById('summary-cards').innerHTML = cards.map(([key, label, icon, color]) => `<div class="col-6 col-xl-2"><div class="card shadow-sm h-100 border-start border-4 border-${color}"><div class="card-body"><div class="small text-muted">${label}</div><div class="d-flex justify-content-between align-items-end"><strong class="fs-2">${escapeHtml(summary[key])}</strong><i class="bi bi-${icon} fs-3 text-${color}" aria-hidden="true"></i></div></div></div></div>`).join('');
+        document.getElementById('summary-cards').innerHTML = cards.map(([key, label, icon, color]) => {
+            const isTotalRecords = key === 'total_registros';
+            const cardClass = isTotalRecords ? 'ges-total-records-card' : `border-start border-4 border-${color}`;
+            const iconClass = isTotalRecords ? 'ges-total-records-card-icon' : `text-${color}`;
+            return `<div class="col-6 col-xl-2"><div class="card shadow-sm h-100 ${cardClass}"><div class="card-body"><div class="small text-muted">${label}</div><div class="d-flex justify-content-between align-items-end"><strong class="fs-2">${escapeHtml(summary[key])}</strong><i class="bi bi-${icon} fs-3 ${iconClass}" aria-hidden="true"></i></div></div></div></div>`;
+        }).join('');
     }
 
     function renderTables(load, records) {
@@ -113,13 +127,14 @@
         dashboardCharts.forEach((chart) => chart.destroy());
         dashboardCharts = [];
         try {
+            const monthQuery = monthInput.value ? `?mes=${encodeURIComponent(monthInput.value)}` : '';
             const [summary, distributions, load, records, milestones, complexity] = await Promise.all([
-                dashboardFetch('{{ url('/api/dashboard/resumen') }}'),
-                dashboardFetch('{{ url('/api/dashboard/distribuciones') }}'),
+                dashboardFetch('{{ url('/api/dashboard/resumen') }}' + monthQuery),
+                dashboardFetch('{{ url('/api/dashboard/distribuciones') }}' + monthQuery),
                 dashboardFetch('{{ url('/api/dashboard/carga-operadores') }}'),
                 dashboardFetch('{{ url('/api/dashboard/registros-por-operador') }}'),
                 dashboardFetch('{{ url('/api/dashboard/hitos') }}'),
-                dashboardFetch('{{ url('/api/dashboard/complejidad-promedio') }}'),
+                dashboardFetch('{{ url('/api/dashboard/complejidad-promedio') }}' + monthQuery),
             ]);
             if (!summary) return;
             renderSummary(summary);
@@ -144,6 +159,7 @@
     }
 
     document.getElementById('refresh-dashboard').addEventListener('click', loadDashboard);
+    monthInput.addEventListener('change', loadDashboard);
     loadDashboard();
 </script>
 @endsection

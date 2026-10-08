@@ -7,15 +7,16 @@ use App\Models\Hito;
 use App\Models\Paciente;
 use App\Models\RegistroGes;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 class DashboardService
 {
-    public function resumen(User $user): array
+    public function resumen(User $user, ?string $mes = null): array
     {
-        $visibles = $this->registrosVisibles($user);
+        $visibles = $this->registrosVisibles($user, $mes);
         $totalPacientes = Paciente::query()
             ->where('activo', true)
             ->where(function ($query) use ($user): void {
@@ -46,9 +47,9 @@ class DashboardService
         ];
     }
 
-    public function distribuciones(User $user): array
+    public function distribuciones(User $user, ?string $mes = null): array
     {
-        $prioridades = $this->registrosVisibles($user)
+        $prioridades = $this->registrosVisibles($user, $mes)
             ->join('prioridades', 'prioridades.id_prioridad', '=', 'registros_ges.id_prioridad')
             ->select('prioridades.nombre as label', DB::raw('COUNT(*) as total'))
             ->groupBy('prioridades.id_prioridad', 'prioridades.nombre')
@@ -57,7 +58,7 @@ class DashboardService
             ->map(fn ($row) => ['label' => $row->label, 'total' => (int) $row->total])
             ->all();
 
-        $patologias = $this->registrosVisibles($user)
+        $patologias = $this->registrosVisibles($user, $mes)
             ->join('patologias', 'patologias.id_patologia', '=', 'registros_ges.id_patologia')
             ->select('patologias.nombre as label', DB::raw('COUNT(*) as total'))
             ->groupBy('patologias.id_patologia', 'patologias.nombre')
@@ -66,7 +67,7 @@ class DashboardService
             ->map(fn ($row) => ['label' => $row->label, 'total' => (int) $row->total])
             ->all();
 
-        $tipos = $this->registrosVisibles($user)
+        $tipos = $this->registrosVisibles($user, $mes)
             ->join('tipos_registro', 'tipos_registro.id_tipo_registro', '=', 'registros_ges.id_tipo_registro')
             ->select('tipos_registro.nombre as label', DB::raw('COUNT(*) as total'))
             ->groupBy('tipos_registro.id_tipo_registro', 'tipos_registro.nombre')
@@ -147,14 +148,14 @@ class DashboardService
         ];
     }
 
-    public function complejidadPromedio(User $user): array
+    public function complejidadPromedio(User $user, ?string $mes = null): array
     {
         if (! Schema::hasTable('complejidad_registro')) {
             return ['promedio' => 0.0];
         }
 
         $tiposVisibles = $this->registrosVisibles($user)
-            ->select('id_tipo_registro')
+            ->select('registros_ges.id_tipo_registro')
             ->distinct()
             ->pluck('id_tipo_registro')
             ->all();
@@ -165,6 +166,10 @@ class DashboardService
 
         $promedio = DB::table('complejidad_registro')
             ->whereIn('id_tipo_registro', $tiposVisibles)
+            ->when($mes !== null, function ($query) use ($mes): void {
+                [$inicio, $fin] = $this->rangoMes($mes);
+                $query->whereBetween('fecha_evaluacion', [$inicio, $fin]);
+            })
             ->selectRaw('COALESCE(AVG(puntaje), 0) as promedio')
             ->value('promedio');
 
@@ -173,8 +178,27 @@ class DashboardService
         ];
     }
 
-    private function registrosVisibles(User $user): Builder
+    private function registrosVisibles(User $user, ?string $mes = null): Builder
     {
-        return RegistroGes::query()->visibleTo($user);
+        return RegistroGes::query()
+            ->visibleTo($user)
+            ->when($mes !== null, function (Builder $query) use ($mes): void {
+                [$inicio, $fin] = $this->rangoMes($mes);
+                $query->where(function (Builder $fecha) use ($inicio, $fin): void {
+                    $fecha->whereBetween('registros_ges.fecha_ingreso', [substr($inicio, 0, 10), substr($fin, 0, 10)])
+                        ->orWhere(function (Builder $sinIngreso) use ($inicio, $fin): void {
+                            $sinIngreso->whereNull('registros_ges.fecha_ingreso')
+                                ->whereBetween('registros_ges.fecha_creacion', [$inicio, $fin]);
+                        });
+                });
+            });
+    }
+
+    /** @return array{0: string, 1: string} */
+    private function rangoMes(string $mes): array
+    {
+        $inicio = Carbon::createFromFormat('!Y-m', $mes)->startOfMonth();
+
+        return [$inicio->toDateTimeString(), $inicio->copy()->endOfMonth()->toDateTimeString()];
     }
 }

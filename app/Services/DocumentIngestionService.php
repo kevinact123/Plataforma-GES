@@ -224,17 +224,12 @@ class DocumentIngestionService
 
             $pacientes = [];
             $registros = [];
-            $fechasCompletadas = 0;
             foreach ($filas as $datos) {
                 $paciente = null;
                 if (! empty($datos['rut'])) {
-                    $missingBirthDate = empty($datos['fecha_nacimiento']);
                     $paciente = $this->resolveOrCreatePatient($datos);
                     if (! $paciente) {
                         throw new \RuntimeException('No se pudo resolver un paciente del documento.');
-                    }
-                    if ($missingBirthDate && $paciente->wasRecentlyCreated) {
-                        $fechasCompletadas++;
                     }
                     $pacientes[$paciente->id_paciente] = $paciente;
                 }
@@ -294,7 +289,6 @@ class DocumentIngestionService
                 'mensaje' => 'Documento importado exitosamente.',
                 'pacientes_procesados' => count($pacientes),
                 'registros_procesados' => count($registros),
-                'fechas_nacimiento_completadas' => $fechasCompletadas,
                 'id_paciente' => $firstPaciente?->id_paciente,
                 'id_registro' => $firstRegistro?->id_registro,
                 'registros_creados' => [
@@ -404,7 +398,7 @@ class DocumentIngestionService
     private function patientAttributes(array $datos, bool $forCreate = false): array
     {
         $attributes = [];
-        foreach (['nombre', 'apellido_paterno', 'apellido_materno', 'fecha_nacimiento', 'sexo'] as $field) {
+        foreach (['nombre', 'apellido_paterno', 'apellido_materno', 'hora_cierre_dau', 'sexo'] as $field) {
             if (array_key_exists($field, $datos) && $datos[$field] !== '') {
                 $attributes[$field] = $datos[$field];
             }

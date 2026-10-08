@@ -12,12 +12,12 @@ class DashboardController extends Controller
 
     public function resumen(Request $request): JsonResponse
     {
-        return response()->json($this->service->resumen($request->user()));
+        return response()->json($this->service->resumen($request->user(), $this->mes($request)));
     }
 
     public function distribuciones(Request $request): JsonResponse
     {
-        return response()->json($this->service->distribuciones($request->user()));
+        return response()->json($this->service->distribuciones($request->user(), $this->mes($request)));
     }
 
     public function cargaOperadores(Request $request): JsonResponse
@@ -41,6 +41,11 @@ class DashboardController extends Controller
 
     public function complejidadPromedio(Request $request): JsonResponse
     {
-        return response()->json($this->service->complejidadPromedio($request->user()));
+        return response()->json($this->service->complejidadPromedio($request->user(), $this->mes($request)));
+    }
+
+    private function mes(Request $request): ?string
+    {
+        return $request->validate(['mes' => ['nullable', 'date_format:Y-m']])['mes'] ?? null;
     }
 }

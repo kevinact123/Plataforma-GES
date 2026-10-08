@@ -12,9 +12,9 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
 
 </head>
-<body class="bg-light">
+<body class="bg-light d-flex align-items-center min-vh-100">
 
-<div class="container p-3">
+<div class="container p-3 w-100">
     <div class="card login-card shadow-lg mx-auto" style="max-width: 420px;">
         <div class="card-body p-4">
             <form id="login-form">
@@ -61,6 +61,7 @@
 
         <div class="card-footer bg-light text-center py-3 border-0 rounded-bottom">
             <small class="text-muted">Sistema de Gestión de Garantías Explícitas en Salud</small>
+            <div class="small text-muted">developed by Kevin Cuevas</div>
         </div>
     </div>
 </div>

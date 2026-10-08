@@ -24,6 +24,80 @@
     </div>
 </div>
 
+<div class="card shadow-sm mb-4" id="record-creation-section">
+    <div class="card-header bg-white">
+        <h2 class="h5 mb-0">Crear registro GES</h2>
+    </div>
+    <div class="card-body">
+        <form id="registro-form" class="row g-3">
+            <div class="col-md-4">
+                <label class="form-label" for="id_paciente">Paciente</label>
+                <select class="form-select" id="id_paciente" name="id_paciente" required><option value="">Selecciona un paciente</option></select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label" for="id_patologia">Patología</label>
+                <select class="form-select" id="id_patologia" name="id_patologia" required><option value="">Selecciona una patología</option></select>
+            </div>
+            <div class="col-md-7">
+                <label class="form-label" for="patologias_asociadas_busqueda">Enfermedades o complicaciones asociadas (opcional)</label>
+                <select class="form-select py-1" id="patologias_asociadas" name="patologias_asociadas[]" multiple size="2"></select>
+                <div id="patologias_asociadas_seleccionadas" class="d-flex flex-wrap gap-1 mb-2 d-none"></div>
+                <div class="form-text" id="patologias_asociadas_resumen">Opcional. Busca y selecciona una o varias patologías asociadas.</div>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label" for="otras_complicaciones">Otras complicaciones</label>
+                <input class="form-control" id="otras_complicaciones" name="otras_complicaciones" maxlength="200" placeholder="Si no está en la lista">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label" for="observacion_asociacion">Detalle opcional</label>
+                <input class="form-control" id="observacion_asociacion" name="observacion_asociacion" maxlength="500" placeholder="Describe la complicación asociada">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label" for="id_prioridad">Prioridad</label>
+                <select class="form-select" id="id_prioridad" name="id_prioridad" required><option value="">Selecciona una prioridad</option></select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label" for="id_tipo_registro">Tipo de registro</label>
+                <select class="form-select" id="id_tipo_registro" name="id_tipo_registro" required><option value="">Selecciona un tipo</option></select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label" for="tipo_tratamiento">Tipo de tratamiento</label>
+                <input class="form-control" id="tipo_tratamiento" name="tipo_tratamiento" maxlength="255">
+            </div>
+            <div class="col-md-4 col-lg-3">
+                <label class="form-label" for="estado">Estado</label>
+                <select class="form-select" id="estado" name="estado">
+                    <option value="Pendiente">Pendiente</option>
+                    <option value="Asignado">Asignado</option>
+                    <option value="Completado">Completado</option>
+                </select>
+            </div>
+            <div class="col-md-4 col-lg-3">
+                <label class="form-label" for="fecha_ingreso">Fecha de ingreso</label>
+                <input class="form-control" id="fecha_ingreso" name="fecha_ingreso" type="date">
+            </div>
+            <div class="col-md-4 col-lg-3">
+                <label class="form-label" for="fecha_limite">Fecha límite</label>
+                <input class="form-control" id="fecha_limite" name="fecha_limite" type="date">
+            </div>
+            <div class="col-12">
+                <label class="form-label" for="observaciones">Observaciones</label>
+                <textarea class="form-control" id="observaciones" name="observaciones" rows="3"></textarea>
+            </div>
+            <div class="col-12">
+                <div class="border rounded p-3 bg-light-subtle">
+                    <label class="form-label fw-semibold" for="documento_registro">Subir archivos</label>
+                    <input class="form-control" id="documento_registro" name="documento" type="file">
+                    <div class="form-text">Adjunta documentación del registro si lo necesitas.</div>
+                </div>
+            </div>
+            <div class="col-12">
+                <button class="btn btn-primary" id="create-registro" type="submit" disabled><i class="bi bi-plus-circle me-1" aria-hidden="true"></i>Crear registro</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <div class="card shadow-sm mb-4" id="user-management-section">
     <div class="card-header bg-white">
         <h2 class="h5 mb-0">Nuevo usuario</h2>
@@ -152,6 +226,7 @@
     const settingsUser = JSON.parse(localStorage.getItem('auth_user') || 'null');
     const permissions = new Set(settingsUser?.permissions || []);
     document.getElementById('assignment-management-section')?.classList.toggle('d-none', !permissions.has('asignar_pacientes'));
+    document.getElementById('record-creation-section')?.classList.toggle('d-none', !permissions.has('crear_registros'));
     document.getElementById('user-management-section')?.classList.toggle('d-none', !permissions.has('administrar_usuarios'));
     document.getElementById('pathology-management-section')?.classList.toggle('d-none', !permissions.has('administrar_patologias'));
     document.getElementById('complexity-management-section')?.classList.toggle('d-none', !permissions.has('editar_registros'));
@@ -184,7 +259,7 @@
     async function apiRequest(url, options = {}) {
         const response = await fetch(url, {
             ...options,
-            headers: { Accept: 'application/json', ...(options.body ? { 'Content-Type': 'application/json' } : {}), Authorization: `Bearer ${adminToken}`, ...options.headers },
+            headers: { Accept: 'application/json', ...(options.body && !(options.body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}), Authorization: `Bearer ${adminToken}`, ...options.headers },
         });
         const data = await response.json();
         if (response.status === 401) {
@@ -195,6 +270,193 @@
         if (!response.ok) throw new Error(data.message || Object.values(data.errors || {}).flat().join(' ') || 'No fue posible completar la operación.');
         return data;
     }
+
+    @include('partials.ges-select-filter')
+
+    function attachMultiSelectFilter(select, placeholder) {
+        const options = Array.from(select.options)
+            .filter((option) => option.value !== '')
+            .map((option) => ({ value: option.value, text: option.textContent }));
+        const search = document.createElement('input');
+        search.type = 'search';
+        search.className = 'form-control';
+        search.id = `${select.id}_busqueda`;
+        search.placeholder = placeholder;
+        search.autocomplete = 'off';
+        search.setAttribute('aria-label', placeholder);
+
+        const searchContainer = document.createElement('div');
+        searchContainer.className = 'position-relative';
+        const results = document.createElement('div');
+        results.className = 'list-group position-absolute w-100 shadow-sm d-none';
+        results.style.cssText = 'z-index:1055;top:100%;max-height:260px;overflow-y:auto;';
+        searchContainer.append(search, results);
+        select.classList.add('d-none');
+        select.parentNode.insertBefore(searchContainer, select);
+
+        const selected = new Set(Array.from(select.selectedOptions, (option) => option.value));
+        const selectedList = document.getElementById('patologias_asociadas_seleccionadas');
+        const summary = document.getElementById('patologias_asociadas_resumen');
+        select.parentNode.insertBefore(selectedList, searchContainer);
+        let isFocused = false;
+
+        const renderSelected = () => {
+            selectedList.innerHTML = Array.from(selected)
+                .map((value) => options.find((option) => option.value === value))
+                .filter(Boolean)
+                .map((option) => `<span class="badge text-bg-secondary d-inline-flex align-items-center gap-1">${escapeHtml(option.text)}<button type="button" class="btn-close btn-close-white" aria-label="Quitar ${escapeHtml(option.text)}" data-remove-value="${escapeHtml(option.value)}"></button></span>`)
+                .join('');
+            selectedList.classList.toggle('d-none', !selected.size);
+            summary.textContent = selected.size
+                ? `${selected.size} patología(s) seleccionada(s). Opcional.`
+                : 'Opcional. Busca y selecciona una o varias patologías asociadas.';
+            Array.from(select.options).forEach((option) => {
+                option.selected = selected.has(option.value);
+            });
+        };
+
+        const renderResults = () => {
+            if (!isFocused) {
+                results.classList.add('d-none');
+                return;
+            }
+            const query = search.value.trim();
+            if (!query) {
+                results.innerHTML = '<div class="list-group-item text-muted">Escribe para buscar patologías.</div>';
+            } else {
+                const matches = options
+                    .filter((option) => option.value !== document.getElementById('id_patologia').value && matchesSearch(option.text, query))
+                    .slice(0, 50);
+                results.innerHTML = matches.length
+                    ? matches.map((option) => `<button type="button" class="list-group-item list-group-item-action text-start" data-value="${escapeHtml(option.value)}" aria-pressed="${selected.has(option.value)}"><i class="bi ${selected.has(option.value) ? 'bi-check-square-fill' : 'bi-square'} me-2" aria-hidden="true"></i>${escapeHtml(option.text)}</button>`).join('')
+                    : '<div class="list-group-item text-muted">Sin coincidencias</div>';
+            }
+            results.classList.remove('d-none');
+        };
+        select._removeAssociation = (value) => {
+            selected.delete(value);
+            renderSelected();
+            renderResults();
+        };
+
+        search.addEventListener('input', renderResults);
+        search.addEventListener('focus', () => {
+            isFocused = true;
+            renderResults();
+        });
+        search.addEventListener('blur', () => {
+            isFocused = false;
+            setTimeout(renderResults, 150);
+        });
+        search.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') event.preventDefault();
+            if (event.key === 'Escape') {
+                isFocused = false;
+                renderResults();
+                search.blur();
+            }
+        });
+        results.addEventListener('mousedown', (event) => event.preventDefault());
+        results.addEventListener('click', (event) => {
+            const button = event.target.closest('[data-value]');
+            if (!button) return;
+            const value = button.dataset.value;
+            if (selected.has(value)) selected.delete(value);
+            else selected.add(value);
+            renderSelected();
+            renderResults();
+        });
+        selectedList.addEventListener('click', (event) => {
+            const button = event.target.closest('[data-remove-value]');
+            if (!button) return;
+            selected.delete(button.dataset.removeValue);
+            renderSelected();
+            renderResults();
+        });
+
+        select.form?.addEventListener('reset', () => {
+            selected.clear();
+            search.value = '';
+            renderSelected();
+            renderResults();
+        });
+        renderSelected();
+    }
+
+    async function loadRecordCatalogs() {
+        const response = await apiRequest('{{ url('/api/registros-ges/catalogos') }}');
+        const pacientes = response.pacientes?.data || response.pacientes || [];
+        const patologias = response.patologias?.data || response.patologias || [];
+        const prioridades = response.prioridades?.data || response.prioridades || [];
+        const tipos = response.tipos_registro?.data || response.tipos_registro || [];
+        fillSelect('id_paciente', pacientes, (item) => `${item.nombre} ${item.apellido_paterno} · ${item.rut}`);
+        attachSelectFilter(document.getElementById('id_paciente'), 'Buscar paciente por nombre o RUT...');
+        fillSelect('id_patologia', patologias, (item) => `${item.numero_ges} - ${item.nombre}`);
+        fillSelect('patologias_asociadas', patologias, (item) => `${item.numero_ges} - ${item.nombre}`, (item) => item.id_patologia);
+        attachMultiSelectFilter(document.getElementById('patologias_asociadas'), 'Buscar patología asociada...');
+        fillSelect('id_prioridad', prioridades, (item) => `${item.nombre} (nivel ${item.nivel})`);
+        fillSelect('id_tipo_registro', tipos, (item) => item.nombre);
+        document.getElementById('id_patologia').onchange = () => {
+            const principal = document.getElementById('id_patologia').value;
+            const associationSelect = document.getElementById('patologias_asociadas');
+            const principalOption = Array.from(associationSelect.options).find((option) => option.value === principal);
+            if (principalOption?.selected) associationSelect._removeAssociation(principal);
+        };
+        document.getElementById('create-registro').disabled = false;
+    }
+
+    document.getElementById('registro-form').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const form = event.target;
+        const formData = new FormData(form);
+        const file = formData.get('documento');
+        const payload = Object.fromEntries(formData.entries());
+        payload.patologias_asociadas = formData.getAll('patologias_asociadas[]').map(Number);
+        delete payload['patologias_asociadas[]'];
+        if (!payload.patologias_asociadas.length) delete payload.patologias_asociadas;
+        const otras = (payload.otras_complicaciones || '').trim();
+        delete payload.otras_complicaciones;
+        if (otras) {
+            const nota = `Otras complicaciones: ${otras}`;
+            payload.observaciones = payload.observaciones ? `${payload.observaciones}\n${nota}` : nota;
+        }
+
+        Object.keys(payload).forEach((key) => {
+            if (payload[key] === '' || payload[key] === null) {
+                delete payload[key];
+            }
+            if (['id_paciente', 'id_patologia', 'id_prioridad', 'id_tipo_registro'].includes(key)) {
+                payload[key] = Number(payload[key]);
+            }
+        });
+
+        try {
+            const createdResponse = await apiRequest('{{ url('/api/registros-ges') }}', {
+                method: 'POST',
+                body: JSON.stringify(payload),
+            });
+
+            const registroCreado = createdResponse?.data || createdResponse;
+            const registroId = registroCreado?.id_registro ?? null;
+
+            if (registroId && file && file.size > 0) {
+                const docFormData = new FormData();
+                docFormData.append('documento', file);
+                if (payload.observaciones) {
+                    docFormData.append('observaciones', payload.observaciones);
+                }
+                await apiRequest(`{{ url('/api/registros-ges') }}/${registroId}/documentos`, {
+                    method: 'POST',
+                    body: docFormData,
+                });
+            }
+
+            form.reset();
+            showMessage('Registro GES creado correctamente.', 'success');
+        } catch (error) {
+            showMessage(error.message, 'danger');
+        }
+    });
 
     function renderPathologies(pathologies) {
         allPathologies = pathologies;
@@ -207,10 +469,10 @@
                     <div class="row g-2">
                         ${filteredPathologies.map((pathology) => {
                             const isConfidencial = Boolean(pathology.confidencial);
-                            const confidentialBadge = isConfidencial ? '<span class="badge text-bg-warning">Confidencial</span>' : '<span class="badge text-bg-light border">Normal</span>';
+                            const confidentialBadge = isConfidencial ? '<span class="badge text-bg-danger">Confidencial</span>' : '<span class="badge text-bg-light border">Normal</span>';
                             return `
                                 <div class="col-xl-6">
-                                    <div class="border rounded p-2 ${isConfidencial ? 'border-warning bg-warning-subtle' : 'border-light bg-white'} pathology-permission-card">
+                                    <div class="border rounded p-2 ${isConfidencial ? 'border-danger bg-danger-subtle' : 'border-light bg-white'} pathology-permission-card">
                                         <div class="d-flex justify-content-between align-items-center gap-2">
                                             <strong class="small me-2">${escapeHtml(pathology.numero_ges)} - ${escapeHtml(pathology.nombre)}</strong>
                                             ${confidentialBadge}
@@ -258,8 +520,8 @@
             const permiso = permissionsMap.get(pathology.id_patologia) || {};
             const selected = Boolean(permiso.puede_ver || permiso.puede_editar || permiso.puede_asignar);
             const isConfidencial = Boolean(pathology.confidencial);
-            const confidentialBadge = isConfidencial ? '<span class="badge text-bg-warning">Confidencial</span>' : '<span class="badge text-bg-light border">Normal</span>';
-            return `<div class="col-lg-6"><div class="border rounded p-3 ${isConfidencial ? 'border-warning bg-warning-subtle' : 'border-light'}"><div class="d-flex justify-content-between align-items-center gap-2"><strong>${escapeHtml(pathology.numero_ges)} - ${escapeHtml(pathology.nombre)}</strong>${confidentialBadge}</div><div class="mt-2 d-flex gap-3 flex-wrap"><label><input type="checkbox" name="permisos[${pathology.id_patologia}]" ${selected ? 'checked' : ''}> Seleccionar</label></div></div></div>`;
+            const confidentialBadge = isConfidencial ? '<span class="badge text-bg-danger">Confidencial</span>' : '<span class="badge text-bg-light border">Normal</span>';
+            return `<div class="col-lg-6"><div class="border rounded p-3 ${isConfidencial ? 'border-danger bg-danger-subtle' : 'border-light'}"><div class="d-flex justify-content-between align-items-center gap-2"><strong>${escapeHtml(pathology.numero_ges)} - ${escapeHtml(pathology.nombre)}</strong>${confidentialBadge}</div><div class="mt-2 d-flex gap-3 flex-wrap"><label><input type="checkbox" name="permisos[${pathology.id_patologia}]" ${selected ? 'checked' : ''}> Seleccionar</label></div></div></div>`;
         }).join('');
         document.getElementById('digitadora-permissions-form').dataset.userId = user.id_usuario;
     }
@@ -528,6 +790,7 @@
 
     document.getElementById('config-complexity-form')?.addEventListener('submit', saveConfigComplexity);
     if (permissions.has('editar_registros')) loadConfigComplexityTypes();
+    if (permissions.has('crear_registros')) loadRecordCatalogs().catch((error) => showMessage(error.message, 'danger'));
     loadUsers();
     if (permissions.has('asignar_pacientes')) loadAutomaticAssignmentRecords();
 </script>

@@ -615,6 +615,7 @@ class RegistroGesApiTest extends TestCase
             $table->string('apellido_paterno');
             $table->string('apellido_materno')->nullable();
             $table->date('fecha_nacimiento')->nullable();
+            $table->dateTime('hora_cierre_dau')->nullable();
             $table->string('sexo')->nullable();
             $table->boolean('activo')->default(true);
             $table->timestamp('fecha_registro')->nullable();

@@ -20,6 +20,7 @@ class PacienteController extends Controller
     public function store(StorePacienteRequest $request): JsonResponse
     {
         $paciente = Paciente::create([
+            'fecha_nacimiento' => '1900-01-01',
             ...$request->validated(),
             'activo' => true,
         ]);
