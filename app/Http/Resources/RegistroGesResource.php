@@ -10,6 +10,9 @@ class RegistroGesResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $user = $request->user();
+        $registro = $this->resource;
+
         return [
             'id_registro' => $this->id_registro,
             'id_paciente' => $this->id_paciente,
@@ -23,26 +26,38 @@ class RegistroGesResource extends JsonResource
             'observaciones' => $this->observaciones,
             'fecha_creacion' => $this->fecha_creacion?->toISOString(),
             'fecha_actualizacion' => $this->fecha_actualizacion?->toISOString(),
+            'puede_ver' => $user ? $user->can('view', $registro) : false,
+            'puede_editar' => $user ? $user->can('update', $registro) : false,
+            'puede_eliminar' => $user ? $user->can('delete', $registro) : false,
             'paciente' => new PacienteResource($this->whenLoaded('paciente')),
             'patologia' => new PatologiaResource($this->whenLoaded('patologia')),
+            'patologias_asociadas' => $this->when(
+                $this->relationLoaded('asociacionesPatologia'),
+                fn () => RegistroGesPatologiaResource::collection(
+                    $this->asociacionesPatologia->filter(
+                        fn ($asociacion) => $asociacion->patologia
+                            && ($user?->puedeVerPatologia($asociacion->patologia) ?? false),
+                    ),
+                ),
+            ),
             'prioridad' => new PrioridadResource($this->whenLoaded('prioridad')),
             'tipo_registro' => new TipoRegistroResource($this->whenLoaded('tipoRegistro')),
             'asignaciones' => AsignacionResource::collection($this->whenLoaded('asignaciones')),
             'documentos' => RegistroGesDocumentoResource::collection($this->whenLoaded('documentos')),
+            'documentos_generales' => $this->whenLoaded('documentosGenerales'),
             'cantidad_documentos' => $this->cantidadDocumentos(),
         ];
     }
 
     private function cantidadDocumentos(): int
     {
-        if ($this->relationLoaded('documentos')) {
-            return $this->documentos->count();
-        }
+        $registroDocuments = $this->relationLoaded('documentos')
+            ? $this->documentos->count()
+            : (Schema::hasTable('registros_ges_documentos') ? $this->documentos()->count() : 0);
+        $generalDocuments = $this->relationLoaded('documentosGenerales')
+            ? $this->documentosGenerales->count()
+            : (Schema::hasTable('documentos_generales') ? $this->documentosGenerales()->count() : 0);
 
-        if (!Schema::hasTable('registros_ges_documentos')) {
-            return 0;
-        }
-
-        return $this->documentos()->count();
+        return $registroDocuments + $generalDocuments;
     }
 }

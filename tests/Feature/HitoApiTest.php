@@ -4,24 +4,26 @@ namespace Tests\Feature;
 
 use App\Models\Hito;
 use App\Models\Patologia;
+use App\Models\PermisoPatologia;
 use App\Models\Prioridad;
 use App\Models\RegistroGes;
 use App\Models\Rol;
 use App\Models\TipoRegistro;
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class HitoApiTest extends TestCase
 {
-    use RefreshDatabase;
+    use DatabaseTransactions;
 
     protected function setUp(): void
     {
         parent::setUp();
 
         $this->createMilestoneSchema();
+        $this->createRolePermissionSchema();
     }
 
     public function test_can_create_start_complete_and_query_milestones_with_history(): void
@@ -35,6 +37,13 @@ class HitoApiTest extends TestCase
             'descripcion' => 'Patología activa',
             'confidencial' => false,
             'activo' => true,
+        ]);
+        PermisoPatologia::create([
+            'id_usuario' => $responsable->id_usuario,
+            'id_patologia' => $patologia->id_patologia,
+            'puede_ver' => true,
+            'puede_editar' => true,
+            'puede_asignar' => false,
         ]);
 
         $prioridad = Prioridad::create([
@@ -113,12 +122,157 @@ class HitoApiTest extends TestCase
         ]);
     }
 
+    public function test_digitadora_sees_all_milestones_on_visible_records(): void
+    {
+        $admin = $this->createUser('admin', 'Admin', 'admin-own', 'Administrador del sistema');
+        $digitadora = $this->createUser('digitadora', 'Carmen', 'carmen-own', 'Digitadora');
+        $otraDigitadora = $this->createUser('digitadora', 'Lucia', 'lucia-own', 'Digitadora');
+
+        $patologia = Patologia::create([
+            'numero_ges' => 103,
+            'nombre' => 'Patología con permisos',
+            'descripcion' => 'Patología activa',
+            'confidencial' => false,
+            'activo' => true,
+        ]);
+        foreach ([$digitadora, $otraDigitadora] as $usuario) {
+            PermisoPatologia::create([
+                'id_usuario' => $usuario->id_usuario,
+                'id_patologia' => $patologia->id_patologia,
+                'puede_ver' => true,
+                'puede_editar' => false,
+                'puede_asignar' => false,
+            ]);
+        }
+
+        $prioridad = Prioridad::create([
+            'nombre' => 'Media',
+            'nivel' => 3,
+            'descripcion' => 'Prioridad media',
+        ]);
+
+        $tipoRegistro = TipoRegistro::create([
+            'nombre' => 'Prestación Otorgada',
+            'descripcion' => 'Prestación Otorgada',
+            'activo' => true,
+        ]);
+
+        $registro = RegistroGes::create([
+            'id_paciente' => 3,
+            'id_patologia' => $patologia->id_patologia,
+            'id_prioridad' => $prioridad->id_prioridad,
+            'id_tipo_registro' => $tipoRegistro->id_tipo_registro,
+            'tipo_tratamiento' => 'Control',
+            'fecha_ingreso' => '2026-08-22',
+            'fecha_limite' => '2026-08-29',
+            'estado' => 'Pendiente',
+            'observaciones' => 'Revisión de permisos',
+        ]);
+
+        Hito::create([
+            'id_registro' => $registro->id_registro,
+            'id_usuario' => $digitadora->id_usuario,
+            'nombre' => 'Hito de la digitadora',
+            'estado' => 'pendiente',
+            'observacion' => 'Visible para Carmen',
+        ]);
+
+        Hito::create([
+            'id_registro' => $registro->id_registro,
+            'id_usuario' => $otraDigitadora->id_usuario,
+            'nombre' => 'Hito de otra digitadora',
+            'estado' => 'en_proceso',
+            'observacion' => 'No visible para Carmen',
+        ]);
+
+        $this->actingAs($digitadora, 'sanctum')
+            ->getJson('/api/registros-ges/' . $registro->id_registro . '/hitos')
+            ->assertOk()
+            ->assertJsonCount(2, 'data')
+            ->assertJsonFragment(['id_usuario' => $digitadora->id_usuario])
+            ->assertJsonFragment(['id_usuario' => $otraDigitadora->id_usuario]);
+
+        $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/registros-ges/' . $registro->id_registro . '/hitos')
+            ->assertOk()
+            ->assertJsonCount(2, 'data');
+    }
+
+    public function test_can_change_milestone_status_and_delete_it(): void
+    {
+        $admin = $this->createUser('admin', 'Admin', 'admin-change', 'Administrador del sistema');
+        $responsable = $this->createUser('digitadora', 'Carmen', 'carmen-change', 'Digitadora');
+
+        $patologia = Patologia::create([
+            'numero_ges' => 102,
+            'nombre' => 'Patología de cambio',
+            'descripcion' => 'Patología activa',
+            'confidencial' => false,
+            'activo' => true,
+        ]);
+
+        $prioridad = Prioridad::create([
+            'nombre' => 'Alta',
+            'nivel' => 1,
+            'descripcion' => 'Alta prioridad',
+        ]);
+
+        $tipoRegistro = TipoRegistro::create([
+            'nombre' => 'Prestación Otorgada',
+            'descripcion' => 'Prestación Otorgada',
+            'activo' => true,
+        ]);
+
+        $registro = RegistroGes::create([
+            'id_paciente' => 2,
+            'id_patologia' => $patologia->id_patologia,
+            'id_prioridad' => $prioridad->id_prioridad,
+            'id_tipo_registro' => $tipoRegistro->id_tipo_registro,
+            'tipo_tratamiento' => 'Control',
+            'fecha_ingreso' => '2026-08-21',
+            'fecha_limite' => '2026-08-28',
+            'estado' => 'Pendiente',
+            'observaciones' => 'Requiere revisión',
+        ]);
+
+        $hito = Hito::create([
+            'id_registro' => $registro->id_registro,
+            'id_usuario' => $responsable->id_usuario,
+            'nombre' => 'Documentación pendiente',
+            'estado' => 'pendiente',
+            'observacion' => 'Sin iniciar',
+        ]);
+
+        $this->actingAs($admin, 'sanctum')
+            ->postJson('/api/hitos/' . $hito->id_hito . '/estado', [
+                'estado' => 'en_proceso',
+                'observacion' => 'Se ha asignado la revisión',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.estado', 'en_proceso');
+
+        $this->actingAs($admin, 'sanctum')
+            ->postJson('/api/hitos/' . $hito->id_hito . '/estado', [
+                'estado' => 'completado',
+                'observacion' => 'Se finalizó la revisión',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.estado', 'completado');
+
+        $this->actingAs($admin, 'sanctum')
+            ->deleteJson('/api/hitos/' . $hito->id_hito)
+            ->assertOk();
+
+        $this->assertDatabaseMissing('hitos', ['id_hito' => $hito->id_hito]);
+    }
+
     private function createUser(string $rolNombre, string $nombre, string $username, string $descripcion): User
     {
         $role = Rol::create([
             'nombre' => $rolNombre,
             'descripcion' => $descripcion,
         ]);
+        $this->grantDefaultRolePermissions($role);
 
         return User::create([
             'nombre' => $nombre,
@@ -141,6 +295,7 @@ class HitoApiTest extends TestCase
         Schema::create('usuarios', function ($table): void {
             $table->id('id_usuario');
             $table->unsignedBigInteger('id_rol')->nullable();
+            $table->string('tipo_digitadora')->nullable();
             $table->string('nombre');
             $table->string('apellido');
             $table->string('username')->unique();
@@ -174,6 +329,7 @@ class HitoApiTest extends TestCase
         });
 
         Schema::create('registros_ges', function ($table): void {
+            $table->timestamp('eliminado_en')->nullable();
             $table->id('id_registro');
             $table->unsignedBigInteger('id_paciente');
             $table->unsignedBigInteger('id_patologia');

@@ -105,17 +105,19 @@ class PatologiasGesSeeder extends Seeder
         foreach ($patologias as $numeroGes => $nombre) {
             $confidencial = in_array($numeroGes, [18, 86], true);
 
-            Patologia::updateOrCreate(
-                ['numero_ges' => $numeroGes],
-                [
-                    'nombre' => $nombre,
-                    'descripcion' => $confidencial
-                        ? 'Patología GES confidencial. Requiere usuario con autorización correspondiente.'
-                        : null,
-                    'confidencial' => $confidencial,
-                    'activo' => true,
-                ],
-            );
+            $patologia = Patologia::firstOrNew(['numero_ges' => $numeroGes]);
+
+            // La confidencialidad se fija solo al crear, para no pisar cambios autorizados posteriores.
+            if (! $patologia->exists) {
+                $patologia->confidencial = $confidencial;
+                $patologia->descripcion = $confidencial
+                    ? 'Patología GES confidencial. Requiere usuario con autorización correspondiente.'
+                    : null;
+                $patologia->activo = true;
+            }
+
+            $patologia->nombre = $nombre;
+            $patologia->save();
         }
     }
 }

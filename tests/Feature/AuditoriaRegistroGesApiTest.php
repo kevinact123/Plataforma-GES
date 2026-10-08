@@ -11,19 +11,20 @@ use App\Models\Rol;
 use App\Models\TipoRegistro;
 use App\Models\User;
 use App\Services\AsignacionService;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class AuditoriaRegistroGesApiTest extends TestCase
 {
-    use RefreshDatabase;
+    use DatabaseTransactions;
 
     protected function setUp(): void
     {
         parent::setUp();
 
         $this->createAuditSchema();
+        $this->createRolePermissionSchema();
     }
 
     public function test_records_registry_creation_and_assignment_history(): void
@@ -97,6 +98,7 @@ class AuditoriaRegistroGesApiTest extends TestCase
             'nombre' => $rolNombre,
             'descripcion' => $descripcion,
         ]);
+        $this->grantDefaultRolePermissions($role);
 
         return User::create([
             'nombre' => $nombre,
@@ -119,6 +121,7 @@ class AuditoriaRegistroGesApiTest extends TestCase
         Schema::create('usuarios', function ($table): void {
             $table->id('id_usuario');
             $table->unsignedBigInteger('id_rol')->nullable();
+            $table->string('tipo_digitadora')->nullable();
             $table->string('nombre');
             $table->string('apellido');
             $table->string('username')->unique();
@@ -161,6 +164,7 @@ class AuditoriaRegistroGesApiTest extends TestCase
         });
 
         Schema::create('registros_ges', function ($table): void {
+            $table->timestamp('eliminado_en')->nullable();
             $table->id('id_registro');
             $table->unsignedBigInteger('id_paciente');
             $table->unsignedBigInteger('id_patologia');

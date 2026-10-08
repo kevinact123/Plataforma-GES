@@ -23,6 +23,10 @@ class StoreRegistroGesRequest extends FormRequest
             'fecha_limite' => ['nullable', 'date', 'after_or_equal:fecha_ingreso'],
             'estado' => ['nullable', 'string', 'max:50'],
             'observaciones' => ['nullable', 'string'],
+            'patologias_asociadas' => ['nullable', 'array', 'max:50'],
+            'patologias_asociadas.*' => ['integer', 'distinct', 'exists:patologias,id_patologia'],
+            'tipo_asociacion' => ['nullable', 'string', 'max:50'],
+            'observacion_asociacion' => ['nullable', 'string'],
         ];
     }
 }

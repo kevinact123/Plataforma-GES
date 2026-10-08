@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -29,6 +30,15 @@ class Hito extends Model
             'fecha_inicio' => 'datetime',
             'fecha_completado' => 'datetime',
         ];
+    }
+
+    public function scopeVisibleTo(Builder $query, User $user): Builder
+    {
+        if ($user->esAdmin()) {
+            return $query->whereHas('registroGes', fn (Builder $registroQuery) => $registroQuery->visibleTo($user));
+        }
+
+        return $query->whereHas('registroGes', fn (Builder $registroQuery) => $registroQuery->visibleTo($user));
     }
 
     public function registroGes(): BelongsTo

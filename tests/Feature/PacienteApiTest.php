@@ -10,30 +10,34 @@ use App\Models\RegistroGes;
 use App\Models\Rol;
 use App\Models\TipoRegistro;
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class PacienteApiTest extends TestCase
 {
-    use RefreshDatabase;
+    use DatabaseTransactions;
 
     protected function setUp(): void
     {
         parent::setUp();
 
         $this->createAuthorizationTables();
+        $this->createRolePermissionSchema();
+        $this->createDocumentTables();
     }
 
     public function test_active_user_can_create_patient(): void
     {
+        $role = $this->createRoleWithDefaultPermissions('digitadora');
+        $this->grantDefaultRolePermissions($role);
         $user = User::create([
             'nombre' => 'Ana',
             'apellido' => 'Soto',
             'username' => 'ana.creadora',
             'password' => bcrypt('secret123'),
-            'id_rol' => Rol::create(['nombre' => 'digitadora'])->id_rol,
+            'id_rol' => $role->id_rol,
             'activo' => true,
         ]);
 
@@ -64,7 +68,7 @@ class PacienteApiTest extends TestCase
             'apellido' => 'Soto',
             'username' => 'ana.listado',
             'password' => bcrypt('secret123'),
-            'id_rol' => Rol::create(['nombre' => 'digitadora'])->id_rol,
+            'id_rol' => $this->createRoleWithDefaultPermissions('digitadora')->id_rol,
             'activo' => true,
         ]);
 
@@ -84,12 +88,94 @@ class PacienteApiTest extends TestCase
             ->assertJsonFragment(['rut' => '18.765.432-1']);
     }
 
+    public function test_patients_can_be_searched_by_name_or_surname(): void
+    {
+        $user = User::create([
+            'nombre' => 'Ana',
+            'apellido' => 'Soto',
+            'username' => 'ana.nombre',
+            'password' => bcrypt('secret123'),
+            'id_rol' => $this->createRoleWithDefaultPermissions('digitadora')->id_rol,
+            'activo' => true,
+        ]);
+
+        Paciente::create([
+            'rut' => '18.765.432-1',
+            'nombre' => 'Roberto Claudio',
+            'apellido_paterno' => 'Contreras',
+            'apellido_materno' => 'Pérez',
+            'fecha_nacimiento' => '1974-09-21',
+            'activo' => true,
+        ]);
+
+        $this->actingAs($user, 'sanctum')
+            ->getJson('/api/pacientes?nombre=Contreras')
+            ->assertOk()
+            ->assertJsonFragment(['nombre' => 'Roberto Claudio']);
+    }
+
+    public function test_admin_can_delete_patient(): void
+    {
+        $admin = User::create([
+            'nombre' => 'Admin',
+            'apellido' => 'Sistema',
+            'username' => 'admin.paciente',
+            'password' => bcrypt('secret123'),
+            'id_rol' => $this->createRoleWithDefaultPermissions('Administrador', 'Administrador')->id_rol,
+            'activo' => true,
+        ]);
+
+        $paciente = Paciente::create([
+            'rut' => '99.999.999-9',
+            'nombre' => 'Elena',
+            'apellido_paterno' => 'Martínez',
+            'apellido_materno' => 'Ríos',
+            'fecha_nacimiento' => '1987-11-20',
+            'sexo' => 'F',
+            'activo' => true,
+        ]);
+
+        $this->actingAs($admin, 'sanctum')
+            ->deleteJson('/api/pacientes/' . $paciente->id_paciente)
+            ->assertOk()
+            ->assertJsonPath('message', 'Paciente eliminado correctamente.');
+
+        $this->assertDatabaseHas('pacientes', [
+            'id_paciente' => $paciente->id_paciente,
+            'activo' => false,
+        ]);
+    }
+
+    public function test_admin_can_delete_many_patients_without_deleting_records(): void
+    {
+        $admin = User::create([
+            'nombre' => 'Admin Lote',
+            'apellido' => 'Sistema',
+            'username' => 'admin.lote',
+            'password' => bcrypt('secret123'),
+            'id_rol' => $this->createRoleWithDefaultPermissions('Administrador')->id_rol,
+            'activo' => true,
+        ]);
+        $patients = collect(range(1, 2))->map(fn (int $number): Paciente => Paciente::create([
+            'rut' => "10.000.000-{$number}",
+            'nombre' => "Paciente {$number}",
+            'apellido_paterno' => 'Lote',
+            'fecha_nacimiento' => '1990-01-01',
+            'activo' => true,
+        ]));
+
+        $this->actingAs($admin, 'sanctum')
+            ->postJson('/api/pacientes/eliminar-muchos', ['ids' => $patients->pluck('id_paciente')->all()])
+            ->assertOk()
+            ->assertJsonPath('data.eliminados', 2);
+
+        $this->assertDatabaseCount('pacientes', 2);
+        $this->assertDatabaseMissing('pacientes', ['activo' => true]);
+    }
+
     public function test_digitadora_without_permission_cannot_view_patient(): void
     {
-        $role = Rol::create([
-            'nombre' => 'digitadora',
-            'descripcion' => 'Digitadora',
-        ]);
+        $role = $this->createRoleWithDefaultPermissions('digitadora', 'Digitadora');
 
         $user = User::create([
             'nombre' => 'Luis',
@@ -151,10 +237,7 @@ class PacienteApiTest extends TestCase
 
     public function test_user_with_permission_can_view_patient(): void
     {
-        $role = Rol::create([
-            'nombre' => 'digitadora',
-            'descripcion' => 'Digitadora',
-        ]);
+        $role = $this->createRoleWithDefaultPermissions('digitadora', 'Digitadora');
 
         $user = User::create([
             'nombre' => 'Ana',
@@ -233,6 +316,7 @@ class PacienteApiTest extends TestCase
         Schema::create('usuarios', function ($table): void {
             $table->id('id_usuario');
             $table->unsignedBigInteger('id_rol')->nullable();
+            $table->string('tipo_digitadora')->nullable();
             $table->string('nombre');
             $table->string('apellido');
             $table->string('username')->unique();
@@ -287,6 +371,7 @@ class PacienteApiTest extends TestCase
         });
 
         Schema::create('registros_ges', function ($table): void {
+            $table->timestamp('eliminado_en')->nullable();
             $table->id('id_registro');
             $table->unsignedBigInteger('id_paciente');
             $table->unsignedBigInteger('id_patologia');

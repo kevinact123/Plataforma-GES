@@ -22,6 +22,21 @@ class Paciente extends Model
         'apellido_materno',
         'fecha_nacimiento',
         'sexo',
+        'prevision',
+        'tipo_fonasa',
+        'numero_dau',
+        'establecimiento_emision',
+        'establecimiento_destino',
+        'domicilio',
+        'atencion',
+        'consultorio',
+        'reporte',
+        'ges',
+        'desc_cie10',
+        'forma_pago',
+        'servicio_egreso',
+        'ingreso',
+        'edad',
         'activo',
     ];
 
@@ -29,6 +44,8 @@ class Paciente extends Model
     {
         return [
             'fecha_nacimiento' => 'date',
+            'ingreso' => 'datetime',
+            'edad' => 'integer',
             'activo' => 'boolean',
             'fecha_registro' => 'datetime',
         ];
@@ -37,5 +54,10 @@ class Paciente extends Model
     public function registrosGes(): HasMany
     {
         return $this->hasMany(RegistroGes::class, 'id_paciente', 'id_paciente');
+    }
+
+    public function documentosGenerales(): HasMany
+    {
+        return $this->hasMany(DocumentoGeneral::class, 'id_paciente', 'id_paciente');
     }
 }

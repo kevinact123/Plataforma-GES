@@ -7,18 +7,33 @@ use App\Models\Hito;
 use App\Models\Paciente;
 use App\Models\RegistroGes;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class DashboardService
 {
     public function resumen(User $user): array
     {
         $visibles = $this->registrosVisibles($user);
-        $totalPacientes = Paciente::query()->whereHas('registrosGes', fn ($query) => $query->visibleTo($user))->count();
+        $totalPacientes = Paciente::query()
+            ->where('activo', true)
+            ->where(function ($query) use ($user): void {
+                $query
+                    ->whereDoesntHave('registrosGes')
+                    ->orWhereHas('registrosGes', fn ($registroQuery) => $registroQuery->visibleTo($user));
+            })
+            ->count();
         $totalRegistros = (clone $visibles)->count();
         $pendientes = (clone $visibles)->where('estado', 'Pendiente')->count();
         $enProceso = (clone $visibles)->where('estado', 'Asignado')->count();
-        $completados = Asignacion::query()->where('estado', 'finalizada')->whereHas('registroGes', fn ($query) => $query->visibleTo($user))->distinct('id_registro')->count('id_registro');
+        $completados = (clone $visibles)
+            ->where(function ($query): void {
+                $query
+                    ->where('estado', 'Completado')
+                    ->orWhereHas('asignaciones', fn ($assignmentQuery) => $assignmentQuery->where('estado', 'finalizada'));
+            })
+            ->count();
         $sinAsignar = (clone $visibles)->whereDoesntHave('asignaciones')->count();
 
         return [
@@ -69,18 +84,25 @@ class DashboardService
 
     public function cargaOperadores(User $user): array
     {
-        return User::query()
+        $usuarios = User::query()
             ->where('activo', true)
-            ->withCount(['asignaciones as total_activas' => fn ($query) => $query
-                ->where('estado', 'activa')
-                ->whereHas('registroGes', fn ($registroQuery) => $registroQuery->visibleTo($user))])
-            ->get()
-            ->map(function (User $usuario): array {
+            ->get();
+
+        return $usuarios
+            ->map(function (User $usuario) use ($user): array {
+                $totalActivas = Asignacion::query()
+                    ->where('id_usuario', $usuario->id_usuario)
+                    ->where('estado', 'activa')
+                    ->when($user->hasRole('digitadora'), function ($query) use ($user): void {
+                        $query->whereHas('registroGes', fn ($registroQuery) => $registroQuery->visibleTo($user));
+                    })
+                    ->count();
+
                 return [
                     'id_usuario' => $usuario->id_usuario,
-                    'nombre' => trim($usuario->nombre . ' ' . $usuario->apellido),
-                    'total_activas' => (int) $usuario->total_activas,
-                    'carga_ponderada' => round((float) $usuario->total_activas, 2),
+                    'nombre' => trim($usuario->nombre.' '.$usuario->apellido),
+                    'total_activas' => (int) $totalActivas,
+                    'carga_ponderada' => round((float) $totalActivas, 2),
                 ];
             })
             ->values()
@@ -104,7 +126,7 @@ class DashboardService
             ->map(function ($row): array {
                 return [
                     'id_usuario' => (int) $row->id_usuario,
-                    'nombre' => trim($row->nombre_usuario . ' ' . $row->apellido_usuario),
+                    'nombre' => trim($row->nombre_usuario.' '.$row->apellido_usuario),
                     'total_registros' => (int) $row->total_registros,
                 ];
             })
@@ -113,27 +135,45 @@ class DashboardService
 
     public function hitos(User $user): array
     {
-        $visibles = fn ($query) => $query->whereHas('registroGes', fn ($registroQuery) => $registroQuery->visibleTo($user));
-        $pendientes = Hito::query()->whereIn('estado', ['pendiente', 'en_proceso'])->where($visibles)->count();
-        $completados = Hito::query()->where('estado', 'completado')->where($visibles)->count();
+        $visibles = Hito::query()->visibleTo($user);
+        $pendientes = (clone $visibles)->whereRaw('LOWER(estado) = ?', ['pendiente'])->count();
+        $enProceso = (clone $visibles)->whereRaw('LOWER(estado) = ?', ['en_proceso'])->count();
+        $completados = (clone $visibles)->whereRaw('LOWER(estado) = ?', ['completado'])->count();
 
         return [
             'pendientes' => $pendientes,
+            'en_proceso' => $enProceso,
             'completados' => $completados,
         ];
     }
 
     public function complejidadPromedio(User $user): array
     {
-        $tiposVisibles = $this->registrosVisibles($user)->select('id_tipo_registro')->distinct();
-        $promedio = DB::table('complejidad_registro')->whereIn('id_tipo_registro', $tiposVisibles)->avg('puntaje');
+        if (! Schema::hasTable('complejidad_registro')) {
+            return ['promedio' => 0.0];
+        }
+
+        $tiposVisibles = $this->registrosVisibles($user)
+            ->select('id_tipo_registro')
+            ->distinct()
+            ->pluck('id_tipo_registro')
+            ->all();
+
+        if (empty($tiposVisibles)) {
+            return ['promedio' => 0.0];
+        }
+
+        $promedio = DB::table('complejidad_registro')
+            ->whereIn('id_tipo_registro', $tiposVisibles)
+            ->selectRaw('COALESCE(AVG(puntaje), 0) as promedio')
+            ->value('promedio');
 
         return [
-            'promedio' => $promedio ? round((float) $promedio, 2) : 0.0,
+            'promedio' => round((float) $promedio, 2),
         ];
     }
 
-    private function registrosVisibles(User $user): \Illuminate\Database\Eloquent\Builder
+    private function registrosVisibles(User $user): Builder
     {
         return RegistroGes::query()->visibleTo($user);
     }

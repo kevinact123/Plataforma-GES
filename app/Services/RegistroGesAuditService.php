@@ -17,7 +17,7 @@ class RegistroGesAuditService
         mixed $valorNuevo = null,
         ?string $ip = null,
     ): void {
-        if (!Schema::hasTable('historial_registros')) {
+        if (! Schema::hasTable('historial_registros')) {
             return;
         }
 

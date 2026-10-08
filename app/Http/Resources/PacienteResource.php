@@ -20,6 +20,8 @@ class PacienteResource extends JsonResource
             'activo' => $this->activo,
             'fecha_registro' => $this->fecha_registro?->toISOString(),
             'registros_ges' => RegistroGesResource::collection($this->whenLoaded('registrosGes')),
+            'documentos_count' => $this->when(isset($this->documentos_count), fn () => (int) $this->documentos_count),
+            'documentos_generales' => $this->whenLoaded('documentosGenerales'),
         ];
     }
 }

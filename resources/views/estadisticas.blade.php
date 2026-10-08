@@ -29,6 +29,10 @@
 </section>
 
 <section class="row g-3 mb-4">
+    <div class="col-12"><div class="card shadow-sm h-100"><div class="card-header bg-white"><h2 class="h6 mb-0">Seguimiento de hitos</h2></div><div class="card-body row text-center" id="statistics-milestones"></div></div></div>
+</section>
+
+<section class="row g-3 mb-4">
     <div class="col-12 col-lg-7"><div class="card shadow-sm h-100"><div class="card-header bg-white"><h2 class="h6 mb-0">Rendimiento por operador</h2></div><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr><th>Operador</th><th>Promedio</th><th>Evaluaciones</th><th>Carga actual</th></tr></thead><tbody id="operator-table"></tbody></table></div></div></div>
     <div class="col-12 col-lg-5"><div class="card shadow-sm h-100"><div class="card-header bg-white"><h2 class="h6 mb-0">Detalle por tipo de registro</h2></div><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr><th>Tipo</th><th>Promedio</th><th>Total</th></tr></thead><tbody id="type-table"></tbody></table></div></div></div>
 </section>
@@ -56,20 +60,80 @@
         const canvas = document.getElementById(id); Chart.getChart(canvas)?.destroy();
         statisticsCharts.push(new Chart(canvas, { type, data: { labels, datasets: [{ data: values, backgroundColor: colors, borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: type === 'bar' ? 'bottom' : 'right' } }, scales: type === 'bar' ? { y: { beginAtZero: true } } : {} } }));
     }
+    function renderStatisticsMilestones(milestones) {
+        document.getElementById('statistics-milestones').innerHTML = [['pendientes', 'Pendientes', 'warning'], ['en_proceso', 'En proceso', 'info'], ['completados', 'Completados', 'success']].map(([key, label, color]) => `<div class="col-4"><div class="small text-muted">${label}</div><strong class="display-6 text-${color}">${escapeHtml(milestones[key] ?? 0)}</strong></div>`).join('');
+    }
+    function bindStatisticsRefresh() {
+        const refreshFromEvent = () => loadStatistics();
+        window.addEventListener('ges-data-updated', refreshFromEvent);
+        window.addEventListener('storage', (event) => {
+            if (event.key === 'ges-data-updated') refreshFromEvent();
+        });
+    }
+    async function saveComplexity(event) {
+        event.preventDefault();
+        const form = event.target;
+        const payload = {
+            id_tipo_registro: Number(form.id_tipo_registro.value),
+            puntaje: Number(form.puntaje.value),
+            observacion: form.observacion.value.trim(),
+        };
+
+        try {
+            const response = await fetch('{{ url('/api/complejidad') }}', {
+                method: 'POST',
+                headers: { Accept: 'application/json', 'Content-Type': 'application/json', Authorization: `Bearer ${statisticsToken}` },
+                body: JSON.stringify(payload),
+            });
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.message || Object.values(data.errors || {}).flat().join(' ') || 'No fue posible guardar la complejidad.');
+            }
+            form.reset();
+            await loadStatistics();
+            if (data.message) {
+                statisticsError.classList.add('d-none');
+                statisticsLoading.classList.remove('d-none');
+                statisticsLoading.textContent = data.message;
+                setTimeout(() => {
+                    statisticsLoading.classList.add('d-none');
+                    statisticsLoading.textContent = 'Cargando estadísticas...';
+                }, 1500);
+            }
+        } catch (error) {
+            statisticsError.textContent = error.message;
+            statisticsError.classList.remove('d-none');
+        }
+    }
+
     async function loadStatistics() {
         if (statisticsLoadingInProgress) return;
         if (!statisticsToken) { window.location.href = '{{ route('login') }}'; return; }
         statisticsLoadingInProgress = true; statisticsButton.disabled = true; statisticsButton.innerHTML = '<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>Actualizando...'; statisticsLoading.classList.remove('d-none'); statisticsError.classList.add('d-none');
         statisticsCharts.forEach((chart) => chart.destroy()); statisticsCharts = [];
         try {
-            const [distributions, types, operators, pathologies, records] = await Promise.all([
-                statisticsFetch('{{ url('/api/dashboard/distribuciones') }}'), statisticsFetch('{{ url('/api/complejidad/promedio-por-tipo') }}'), statisticsFetch('{{ url('/api/complejidad/operadores') }}'), statisticsFetch('{{ url('/api/complejidad/patologias') }}'), statisticsFetch('{{ url('/api/complejidad') }}'),
+            const [summary, distributions, types, operators, pathologies, records, milestones] = await Promise.all([
+                statisticsFetch('{{ url('/api/dashboard/resumen') }}'),
+                statisticsFetch('{{ url('/api/dashboard/distribuciones') }}'),
+                statisticsFetch('{{ url('/api/complejidad/promedio-por-tipo') }}'),
+                statisticsFetch('{{ url('/api/complejidad/operadores') }}'),
+                statisticsFetch('{{ url('/api/complejidad/patologias') }}'),
+                statisticsFetch('{{ url('/api/complejidad') }}'),
+                statisticsFetch('{{ url('/api/dashboard/hitos') }}'),
             ]);
             const typeData = types?.data || [], operatorData = operators?.data || [], pathologyData = pathologies?.data || [], recordData = records?.data || [];
-            document.getElementById('total-records').textContent = (distributions?.patologias || []).reduce((total, item) => total + item.total, 0);
-            document.getElementById('total-evaluations').textContent = recordData.length;
-            document.getElementById('average-complexity').textContent = recordData.length ? (recordData.reduce((total, item) => total + Number(item.puntaje || 0), 0) / recordData.length).toFixed(2) : '0.00';
+            const totalRecords = Number(summary?.total_registros ?? (distributions?.patologias || []).reduce((total, item) => total + item.total, 0));
+            const completedRecords = Number(summary?.registros_completados ?? 0);
+            document.getElementById('total-records').textContent = totalRecords;
+            document.getElementById('total-evaluations').textContent = Math.max(recordData.length, completedRecords);
+            const averageComplexity = recordData.length ? (recordData.reduce((total, item) => total + Number(item.puntaje || 0), 0) / recordData.length) : 0;
+            document.getElementById('average-complexity').textContent = Number(averageComplexity).toFixed(2);
             document.getElementById('evaluated-types').textContent = typeData.length;
+            renderStatisticsMilestones({
+                pendientes: Number(summary?.registros_pendientes ?? milestones?.pendientes ?? 0),
+                en_proceso: Number(summary?.registros_en_proceso ?? milestones?.en_proceso ?? 0),
+                completados: Number(summary?.registros_completados ?? milestones?.completados ?? 0),
+            });
             document.getElementById('operator-table').innerHTML = operatorData.length ? operatorData.map((item) => `<tr><td>${escapeHtml(item.nombre)}</td><td>${item.promedio}</td><td>${item.total_evaluaciones}</td><td>${item.carga_actual}</td></tr>`).join('') : '<tr><td colspan="4" class="text-muted">Sin evaluaciones.</td></tr>';
             document.getElementById('type-table').innerHTML = typeData.length ? typeData.map((item) => `<tr><td>${escapeHtml(item.nombre)}</td><td>${item.promedio}</td><td>${item.total_evaluaciones}</td></tr>`).join('') : '<tr><td colspan="3" class="text-muted">Sin evaluaciones.</td></tr>';
             const colors = ['#176b87', '#d99a2b', '#5a9367', '#b64b4b', '#6c757d', '#9b6b9e'];
@@ -78,6 +142,6 @@
             drawStatisticsChart('pathology-chart', 'bar', pathologyData.map((item) => item.nombre), pathologyData.map((item) => item.promedio), colors);
         } catch (error) { statisticsError.textContent = error.message; statisticsError.classList.remove('d-none'); } finally { statisticsLoading.classList.add('d-none'); statisticsLoadingInProgress = false; statisticsButton.disabled = false; statisticsButton.innerHTML = '<i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>Actualizar'; }
     }
-    statisticsButton.addEventListener('click', loadStatistics); loadStatistics();
+    statisticsButton.addEventListener('click', loadStatistics); bindStatisticsRefresh(); loadStatistics();
 </script>
 @endsection

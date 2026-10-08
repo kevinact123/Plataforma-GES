@@ -9,19 +9,62 @@ use App\Models\RegistroGes;
 use App\Models\Rol;
 use App\Models\TipoRegistro;
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class ComplejidadRegistroApiTest extends TestCase
 {
-    use RefreshDatabase;
+    use DatabaseTransactions;
 
     protected function setUp(): void
     {
         parent::setUp();
 
         $this->createComplexitySchema();
+        $this->createRolePermissionSchema();
+    }
+
+    public function test_admin_can_store_a_complexity_score_and_dashboard_uses_it(): void
+    {
+        $admin = $this->createUser('admin', 'Admin', 'admin', 'Administrador del sistema');
+        $tipo = TipoRegistro::create([
+            'nombre' => 'Prestación Otorgada',
+            'descripcion' => 'Prestación Otorgada',
+            'activo' => true,
+        ]);
+        $patologia = Patologia::create([
+            'numero_ges' => 1,
+            'nombre' => 'Patología de prueba',
+            'descripcion' => 'Patología activa',
+            'activo' => true,
+        ]);
+        $prioridad = Prioridad::create([
+            'nombre' => 'Normal',
+            'nivel' => 1,
+        ]);
+        RegistroGes::create([
+            'id_paciente' => 1,
+            'id_patologia' => $patologia->id_patologia,
+            'id_prioridad' => $prioridad->id_prioridad,
+            'id_tipo_registro' => $tipo->id_tipo_registro,
+            'estado' => 'Pendiente',
+        ]);
+
+        $this->actingAs($admin, 'sanctum')
+            ->postJson('/api/complejidad', [
+                'id_tipo_registro' => $tipo->id_tipo_registro,
+                'puntaje' => 4,
+                'observacion' => 'Evaluación registrada',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.puntaje', 4)
+            ->assertJsonPath('data.id_tipo_registro', $tipo->id_tipo_registro);
+
+        $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/dashboard/complejidad-promedio')
+            ->assertOk()
+            ->assertJsonPath('promedio', 4);
     }
 
     public function test_can_query_complexity_averages_and_operator_load(): void
@@ -146,6 +189,7 @@ class ComplejidadRegistroApiTest extends TestCase
             'nombre' => $rolNombre,
             'descripcion' => $descripcion,
         ]);
+        $this->grantDefaultRolePermissions($role);
 
         return User::create([
             'nombre' => $nombre,
@@ -168,6 +212,7 @@ class ComplejidadRegistroApiTest extends TestCase
         Schema::create('usuarios', function ($table): void {
             $table->id('id_usuario');
             $table->unsignedBigInteger('id_rol')->nullable();
+            $table->string('tipo_digitadora')->nullable();
             $table->string('nombre');
             $table->string('apellido');
             $table->string('username')->unique();
@@ -201,6 +246,7 @@ class ComplejidadRegistroApiTest extends TestCase
         });
 
         Schema::create('registros_ges', function ($table): void {
+            $table->timestamp('eliminado_en')->nullable();
             $table->id('id_registro');
             $table->unsignedBigInteger('id_paciente');
             $table->unsignedBigInteger('id_patologia');

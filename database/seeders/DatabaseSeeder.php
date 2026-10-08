@@ -16,9 +16,9 @@ class DatabaseSeeder extends Seeder
             throw new \RuntimeException('Define ADMIN_PASSWORD en .env antes de ejecutar el seeder.');
         }
 
-        $rol = Rol::query()->firstOrCreate(
-            ['nombre' => 'admin'],
-            ['descripcion' => 'Administrador del sistema'],
+        Rol::query()->updateOrCreate(
+            ['id_rol' => 1],
+            ['nombre' => 'Administrador', 'descripcion' => 'Administración completa del sistema'],
         );
 
         User::query()->updateOrCreate(
@@ -27,19 +27,23 @@ class DatabaseSeeder extends Seeder
                 'nombre' => env('ADMIN_NAME', 'Administrador'),
                 'apellido' => env('ADMIN_LASTNAME', 'GES'),
                 'password' => $adminPassword,
-                'id_rol' => $rol->id_rol,
+                'id_rol' => 1,
                 'activo' => true,
             ],
+        );
+
+        Rol::query()->updateOrCreate(
+            ['id_rol' => 2],
+            ['nombre' => 'Supervisor', 'descripcion' => 'Supervisión y distribución de carga laboral'],
+        );
+        $digitadoraRol = Rol::query()->updateOrCreate(
+            ['id_rol' => 3],
+            ['nombre' => 'Digitadora', 'descripcion' => 'Digitación y gestión de registros GES'],
         );
 
         $digitadoraPassword = (string) env('DIGITADORA_PASSWORD', '');
 
         if ($digitadoraPassword !== '') {
-            $digitadoraRol = Rol::query()->firstOrCreate(
-                ['nombre' => 'digitadora'],
-                ['descripcion' => 'Digitadora'],
-            );
-
             User::query()->updateOrCreate(
                 ['username' => env('DIGITADORA_USERNAME', 'digitadora01')],
                 [
@@ -47,6 +51,7 @@ class DatabaseSeeder extends Seeder
                     'apellido' => env('DIGITADORA_LASTNAME', 'GES'),
                     'password' => $digitadoraPassword,
                     'id_rol' => $digitadoraRol->id_rol,
+                    'tipo_digitadora' => User::TIPO_DIGITADORA_NO_CONFIDENCIAL,
                     'activo' => true,
                 ],
             );

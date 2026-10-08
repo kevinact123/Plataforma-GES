@@ -11,7 +11,7 @@ class AuthorizePatologiaAccess
 {
     public function handle(Request $request, Closure $next, string $ability = 'view'): mixed
     {
-        if (!$request->user()) {
+        if (! $request->user()) {
             return response()->json([
                 'message' => 'Autenticación requerida.',
             ], 401);
@@ -19,18 +19,18 @@ class AuthorizePatologiaAccess
 
         $patologia = $request->route('patologia');
 
-        if (!$patologia instanceof Patologia) {
+        if (! $patologia instanceof Patologia) {
             $patologiaId = $request->route('patologia') ?? $request->input('id_patologia');
             $patologia = $patologiaId ? Patologia::find($patologiaId) : null;
         }
 
-        if (!$patologia) {
+        if (! $patologia) {
             return response()->json([
                 'message' => 'Patología no encontrada.',
             ], 404);
         }
 
-        if (!$request->user()->can($ability, $patologia)) {
+        if (! $request->user()->can($ability, $patologia)) {
             app(RegistroGesAuditService::class)->registrar(
                 $request->route('registro') ?? null,
                 $request->user()->id_usuario,
@@ -41,7 +41,7 @@ class AuthorizePatologiaAccess
             );
 
             return response()->json([
-                'message' => 'No tienes permisos para ' . $this->accion($ability) . ' esta patología.',
+                'message' => 'No tienes permisos para '.$this->accion($ability).' esta patología.',
             ], 403);
         }
 

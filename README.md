@@ -1,29 +1,115 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Plataforma GES
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Aplicación Laravel para gestionar pacientes, registros GES, asignaciones,
+documentación, hitos y métricas operativas, con controles de acceso por rol y
+confidencialidad de patologías.
 
-## About Laravel
+## Requisitos
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+- PHP 8.2 o superior y Composer.
+- Node.js y npm.
+- MariaDB/MySQL con el esquema base de la plataforma.
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+Las migraciones del repositorio **amplían una base de datos GES existente**:
+no crean las tablas base `usuarios`, `roles`, pacientes ni registros. Antes de
+ejecutarlas, configura `DB_*` en `.env`, confirma que apunta a la base correcta
+y respalda los datos. La normalización de roles consolida datos y no se puede
+revertir automáticamente.
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## Instalación y ejecución
 
-## API de complejidad
+1. Instala dependencias:
 
-Los endpoints requieren autenticación Sanctum y exponen la complejidad como una métrica de carga laboral de las digitadoras. No reemplaza ni modifica la prioridad médica del registro GES.
+   ```sh
+   composer install
+   npm install
+   ```
+
+2. Configura `.env` con la conexión MariaDB/MySQL existente y genera `APP_KEY`
+   si todavía está vacía:
+
+   ```sh
+   php artisan key:generate
+   ```
+
+3. Aplica las migraciones después de verificar la conexión y contar con un
+   respaldo:
+
+   ```sh
+   php artisan migrate --force
+   ```
+
+4. Compila los recursos y levanta el entorno de desarrollo:
+
+   ```sh
+   npm run build
+   composer run dev
+   ```
+
+Para el envío real de códigos OTP, configura un servidor de correo en `.env`;
+`MAIL_MAILER=log` sirve para desarrollo local. La cola está configurada para
+ejecutarse de forma síncrona por defecto.
+
+## Pruebas y compilación
+
+```sh
+php artisan test
+npm run build
+```
+
+Las pruebas automatizadas usan SQLite en memoria y crean los esquemas mínimos
+de cada caso; `MariaDbConnectionTest` además comprueba la conexión configurada
+con la base de datos existente.
+
+## Roles, permisos y confidencialidad
+
+Los únicos roles del sistema son `1 | Administrador`, `2 | Supervisor` y
+`3 | Digitadora`. La migración `2026_10_05_000002_normalize_roles.php` consolida
+`admin` en Administrador, `Operador` y duplicados de `digitadora` en Digitadora.
+Si encuentra roles desconocidos o usuarios que apuntan a roles inexistentes,
+se detiene sin normalizar los datos.
+
+El rol se almacena en `usuarios.id_rol`. El tipo de digitadora es independiente
+(`usuarios.tipo_digitadora`) y admite `NO_CONFIDENCIAL` o `CONFIDENCIAL`; solo
+aplica a Digitadora y es `NULL` para Administrador y Supervisor. No existen
+roles separados como «Digitadora Confidencial».
+
+Los permisos de acción se almacenan en `permisos` y se asocian a roles mediante
+`permisos_roles`:
+
+| Rol | Permisos iniciales |
+| --- | --- |
+| Administrador | Todos los permisos de acción |
+| Supervisor | `ver_registros`, `asignar_pacientes`, `reasignar_pacientes`, `ver_dashboard`, `gestionar_hitos` |
+| Digitadora | `ver_registros`, `crear_registros`, `editar_registros`, `gestionar_hitos` |
+
+Los permisos por patología (`puede_ver`, `puede_editar`, `puede_asignar`) y el
+tipo de digitadora son controles adicionales; no sustituyen los permisos del
+rol.
+
+Las patologías confidenciales se marcan con `patologias.confidencial`. Solo
+Administrador, Supervisor y Digitadora `CONFIDENCIAL` pueden acceder a ellas.
+Una Digitadora `NO_CONFIDENCIAL` no puede verlas, buscarlas, recibir
+asignaciones ni editarlas, aunque tenga permisos explícitos por patología.
+Cambiar una digitadora a `NO_CONFIDENCIAL` elimina sus permisos sobre patologías
+confidenciales.
+
+La confidencialidad se cambia con
+`PUT /api/patologias/{id}/confidencialidad`, enviando
+`{"confidencial": true}` o `{"confidencial": false}`. Requiere
+`administrar_patologias` y deja registro en el log de la aplicación.
+
+El middleware `confidential` protege el grupo `auth:sanctum`. Cuando una persona
+sin acceso referencia un registro, paciente asociado, patología, asignación,
+hito o documento confidencial, la API responde `403 Forbidden`. Los listados,
+las búsquedas y el dashboard también filtran los datos mediante las consultas
+de visibilidad y las policies.
+
+## Complejidad y asignaciones
+
+La complejidad es una métrica de carga laboral de digitadoras; no reemplaza ni
+modifica la prioridad médica del registro GES. Los endpoints requieren
+autenticación Sanctum y responden con el formato `{ "data": [...] }`.
 
 | Método | Endpoint | Descripción |
 | --- | --- | --- |
@@ -32,48 +118,16 @@ Los endpoints requieren autenticación Sanctum y exponen la complejidad como una
 | GET | `/api/complejidad/operadores` | Promedio, puntaje acumulado y carga activa por digitadora. |
 | GET | `/api/complejidad/patologias` | Promedio de complejidad de los tipos asociados a cada patología. |
 
-Las respuestas usan el formato `{ "data": [...] }`. Cada elemento de `/api/complejidad/operadores` incluye:
+La carga ponderada corresponde a `total_puntaje + carga_actual`. Las sugerencias
+de asignación también consideran permisos, confidencialidad y factores
+operativos; `prioridad` se mantiene como un factor independiente de la
+complejidad clínica.
 
-- `promedio`: promedio de puntaje evaluado para la digitadora.
-- `total_puntaje`: suma de sus puntajes de complejidad.
-- `carga_actual`: cantidad de asignaciones activas.
-- `carga_ponderada`: `total_puntaje + carga_actual`.
+## Asignación automática periódica
 
-La sugerencia de asignación usa la carga ponderada junto con factores operativos del trabajo. El campo `prioridad` solo participa como factor independiente de la sugerencia y no se mezcla con la complejidad clínica.
-
-## Learning Laravel
-
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
-
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
-
-## Laravel Sponsors
-
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
-
-### Premium Partners
-
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
-
-## Contributing
-
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
-
-## Code of Conduct
-
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
-
-## Security Vulnerabilities
-
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
-
-## License
-
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+El comando `php artisan asignaciones:automaticas` asigna registros GES
+pendientes con las mismas reglas que el botón de asignación automática. Está
+programado cada cinco minutos en `routes/console.php`. Para que se ejecute
+automáticamente, el servidor debe invocar `php artisan schedule:run` cada
+minuto; en Windows se puede configurar con el Programador de tareas y en Linux
+con cron. La asignación manual sigue disponible.

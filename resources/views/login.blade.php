@@ -1,8 +1,9 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es-MX">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Iniciar Sesión - Plataforma GES</title>
 
     <!-- Bootstrap 5 CSS -->
@@ -14,15 +15,15 @@
 <body class="bg-light">
 
 <div class="container p-3">
-    <div class="card login-card shadow-lg mx-auto">
-        <div class="login-header text-white text-center py-4 px-3">
-            <i class="bi bi-hospital fs-1 mb-2 d-block"></i>
-            <h4 class="fw-bold mb-0">Plataforma GES</h4>
-            <small class="text-white-50">Acceso a Digitadoras y Personal Sanitario</small>
-        </div>
-
+    <div class="card login-card shadow-lg mx-auto" style="max-width: 420px;">
         <div class="card-body p-4">
             <form id="login-form">
+                <img
+                    src="{{ asset('images/logo-hospital-san-carlos.jpg') }}"
+                    alt="Hospital de San Carlos"
+                    class="img-fluid d-block mx-auto mb-3"
+                    style="width: 160px; max-width: 40vw;"
+                >
                 <div id="login-error" class="alert alert-danger d-none" role="alert"></div>
                 <!-- Campo Rut / Usuario -->
                 <div class="mb-3">
@@ -48,7 +49,7 @@
                         <input class="form-check-input" type="checkbox" id="remember">
                         <label class="form-check-label small" for="remember">Recordarme</label>
                     </div>
-                    <a href="#" class="small text-decoration-none">¿Olvidaste tu clave?</a>
+                    <a href="#password-help" class="small text-decoration-none" data-bs-toggle="modal" data-bs-target="#password-help">¿Olvidaste tu clave?</a>
                 </div>
 
                 <!-- Botón de Ingreso -->
@@ -64,9 +65,35 @@
     </div>
 </div>
 
+<div class="modal fade" id="password-help" tabindex="-1" aria-labelledby="password-help-title" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="password-help-title">Recuperar contraseña</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-0">Solicita al administrador de la Plataforma GES que restablezca tu contraseña. Por seguridad, este sistema no envía claves por correo electrónico.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Entendido</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Bootstrap 5 JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="{{ asset('js/auto-dismiss-alerts.js') }}"></script>
+<script src="{{ asset('js/account-lock-notice.js') }}"></script>
 <script>
+    if (sessionStorage.getItem('ges_session_expired_notice') === '1') {
+        sessionStorage.removeItem('ges_session_expired_notice');
+        const expiredAlert = document.getElementById('login-error');
+        expiredAlert.textContent = 'Tu sesión ha expirado por inactividad. Inicia sesión nuevamente.';
+        expiredAlert.classList.remove('d-none');
+    }
+
     document.getElementById('login-form').addEventListener('submit', async function (event) {
         event.preventDefault();
 
@@ -76,12 +103,13 @@
         button.disabled = true;
 
         try {
-            const response = await fetch('{{ url('/api/login') }}', {
+            const response = await fetch('{{ url('/login') }}', {
                 method: 'POST',
                 headers: {
                     'Accept': 'application/json',
                     'Content-Type': 'application/json',
                     'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
                 },
                 body: JSON.stringify({
                     username: document.getElementById('username').value,
@@ -92,12 +120,32 @@
             const data = await response.json();
 
             if (!response.ok) {
-                throw new Error(data.message || 'No fue posible iniciar sesión.');
+                if (response.status === 419) {
+                    // La sesión expiró mientras la página estaba abierta: se recarga para obtener un token válido.
+                    error.textContent = 'Tu sesión expiró por inactividad. Recargando la página...';
+                    error.classList.remove('d-none');
+                    setTimeout(() => window.location.reload(), 1500);
+                    return;
+                }
+
+                if (esBloqueoDeCuenta(response, data)) {
+                    mostrarBloqueoCuenta();
+                    button.disabled = false;
+                    return;
+                }
+
+                throw new Error((response.status === 429 ? 'Demasiados intentos. Espera unos minutos e inténtalo nuevamente.' : data.message) || 'No fue posible iniciar sesión.');
             }
 
-            localStorage.setItem('auth_token', data.token);
-            localStorage.setItem('auth_user', JSON.stringify(data.user));
-            window.location.href = '{{ url('/') }}';
+            if (data.token) {
+                localStorage.setItem('auth_token', data.token);
+                localStorage.setItem('auth_user', JSON.stringify(data.user));
+                window.location.href = '{{ url('/') }}';
+                return;
+            }
+
+            localStorage.setItem('otp_correo_enmascarado', data.correo_enmascarado);
+            window.location.href = '{{ url('/otp') }}';
         } catch (requestError) {
             error.textContent = requestError.message;
             error.classList.remove('d-none');

@@ -5,15 +5,18 @@ namespace App\Services;
 use App\Models\Asignacion;
 use App\Models\ComplejidadRegistro;
 use App\Models\RegistroGes;
+use App\Models\TipoRegistro;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class ComplejidadService
 {
     public function consultar(User $user): array
     {
         $items = ComplejidadRegistro::query()
-            ->when(! $user->esAdmin(), fn ($query) => $query->whereIn('id_tipo_registro', $this->tiposVisibles($user)))
+            ->when($user->hasRole('digitadora'), fn ($query) => $query->whereIn('id_tipo_registro', $this->tiposVisibles($user)))
             ->with(['usuario', 'tipoRegistro'])
             ->orderByDesc('fecha_evaluacion')
             ->get();
@@ -23,7 +26,7 @@ class ComplejidadService
                 return [
                     'id_complejidad' => $item->id_complejidad,
                     'id_usuario' => $item->id_usuario,
-                    'usuario' => $item->usuario ? trim($item->usuario->nombre . ' ' . $item->usuario->apellido) : null,
+                    'usuario' => $item->usuario ? trim($item->usuario->nombre.' '.$item->usuario->apellido) : null,
                     'id_tipo_registro' => $item->id_tipo_registro,
                     'tipo_registro' => $item->tipoRegistro?->nombre,
                     'puntaje' => (int) $item->puntaje,
@@ -34,10 +37,48 @@ class ComplejidadService
         ];
     }
 
+    public function guardar(User $user, array $data): array
+    {
+        if (! Schema::hasTable('complejidad_registro')) {
+            return [
+                'message' => 'La tabla de complejidad no está disponible.',
+            ];
+        }
+
+        $validated = validator($data, [
+            'id_tipo_registro' => ['required', 'integer', 'exists:tipos_registro,id_tipo_registro'],
+            'puntaje' => ['required', 'integer', 'min:1', 'max:5'],
+            'observacion' => ['nullable', 'string', 'max:500'],
+        ])->validate();
+
+        $tipoRegistro = TipoRegistro::query()->findOrFail($validated['id_tipo_registro']);
+
+        $evaluacion = ComplejidadRegistro::query()->create([
+            'id_usuario' => $user->id_usuario,
+            'id_tipo_registro' => $tipoRegistro->id_tipo_registro,
+            'puntaje' => (int) $validated['puntaje'],
+            'observacion' => $validated['observacion'] ?? null,
+            'fecha_evaluacion' => now(),
+        ]);
+
+        return [
+            'data' => [
+                'id_complejidad' => $evaluacion->id_complejidad,
+                'id_usuario' => $evaluacion->id_usuario,
+                'id_tipo_registro' => $evaluacion->id_tipo_registro,
+                'tipo_registro' => $tipoRegistro->nombre,
+                'puntaje' => (int) $evaluacion->puntaje,
+                'observacion' => $evaluacion->observacion,
+                'fecha_evaluacion' => $evaluacion->fecha_evaluacion?->toDateTimeString(),
+            ],
+            'message' => 'Complejidad registrada correctamente.',
+        ];
+    }
+
     public function promedioPorTipo(User $user): array
     {
         $rows = ComplejidadRegistro::query()
-            ->when(! $user->esAdmin(), fn ($query) => $query->whereIn('complejidad_registro.id_tipo_registro', $this->tiposVisibles($user)))
+            ->when($user->hasRole('digitadora'), fn ($query) => $query->whereIn('complejidad_registro.id_tipo_registro', $this->tiposVisibles($user)))
             ->join('tipos_registro', 'tipos_registro.id_tipo_registro', '=', 'complejidad_registro.id_tipo_registro')
             ->select(
                 'tipos_registro.id_tipo_registro',
@@ -64,7 +105,7 @@ class ComplejidadService
     public function porOperador(User $user): array
     {
         $rows = ComplejidadRegistro::query()
-            ->when(! $user->esAdmin(), fn ($query) => $query->whereIn('complejidad_registro.id_tipo_registro', $this->tiposVisibles($user)))
+            ->when($user->hasRole('digitadora'), fn ($query) => $query->whereIn('complejidad_registro.id_tipo_registro', $this->tiposVisibles($user)))
             ->join('usuarios', 'usuarios.id_usuario', '=', 'complejidad_registro.id_usuario')
             ->select(
                 'usuarios.id_usuario',
@@ -80,15 +121,15 @@ class ComplejidadService
 
         return [
             'data' => $rows->map(function ($row) use ($user): array {
-                    $totalActivas = Asignacion::query()
+                $totalActivas = Asignacion::query()
                     ->where('id_usuario', $row->id_usuario)
                     ->where('estado', 'activa')
-                        ->whereHas('registroGes', fn ($query) => $query->visibleTo($user))
+                    ->whereHas('registroGes', fn ($query) => $query->visibleTo($user))
                     ->count();
 
                 return [
                     'id_usuario' => (int) $row->id_usuario,
-                    'nombre' => trim($row->nombre_usuario . ' ' . $row->apellido_usuario),
+                    'nombre' => trim($row->nombre_usuario.' '.$row->apellido_usuario),
                     'promedio' => round((float) $row->promedio, 2),
                     'total_puntaje' => (int) $row->total_puntaje,
                     'total_evaluaciones' => (int) $row->total_evaluaciones,
@@ -102,7 +143,7 @@ class ComplejidadService
     public function porPatologia(User $user): array
     {
         $rows = DB::table('registros_ges as rg')
-            ->when(! $user->esAdmin(), fn ($query) => $query->whereIn('rg.id_registro', RegistroGes::query()->visibleTo($user)->select('id_registro')))
+            ->when($user->hasRole('digitadora'), fn ($query) => $query->whereIn('rg.id_registro', RegistroGes::query()->visibleTo($user)->select('id_registro')))
             ->join('patologias as p', 'p.id_patologia', '=', 'rg.id_patologia')
             ->join('complejidad_registro as cr', 'cr.id_tipo_registro', '=', 'rg.id_tipo_registro')
             ->select(
@@ -127,7 +168,7 @@ class ComplejidadService
         ];
     }
 
-    private function tiposVisibles(User $user): \Illuminate\Database\Eloquent\Builder
+    private function tiposVisibles(User $user): Builder
     {
         return RegistroGes::query()->visibleTo($user)->select('id_tipo_registro')->distinct();
     }

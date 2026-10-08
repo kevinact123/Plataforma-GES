@@ -42,3 +42,29 @@
                 align-items: flex-start;
             }
         }
+
+/* Modo oscuro: Bootstrap 5.3 aplica data-bs-theme; aquí se ajustan los colores propios y las clases fijas. */
+[data-bs-theme="dark"] body { background-color: var(--bs-body-bg); }
+[data-bs-theme="dark"] .sidebar-column,
+[data-bs-theme="dark"] .sidebar { background-color: #161b22; }
+[data-bs-theme="dark"] .sidebar .nav-link:hover,
+[data-bs-theme="dark"] .sidebar .nav-link.active { background-color: #21262d; }
+[data-bs-theme="dark"] .navbar.bg-primary { background-color: #0b3d91 !important; }
+[data-bs-theme="dark"] .bg-white,
+[data-bs-theme="dark"] .bg-light { background-color: var(--bs-tertiary-bg) !important; }
+[data-bs-theme="dark"] .text-bg-light { background-color: var(--bs-secondary-bg) !important; color: var(--bs-body-color) !important; }
+[data-bs-theme="dark"] .bg-light-subtle { background-color: var(--bs-secondary-bg) !important; }
+[data-bs-theme="dark"] .card-header,
+[data-bs-theme="dark"] .card-footer,
+[data-bs-theme="dark"] .modal-header,
+[data-bs-theme="dark"] .modal-footer { background-color: var(--bs-tertiary-bg) !important; color: var(--bs-body-color); }
+[data-bs-theme="dark"] .border-light { border-color: var(--bs-border-color) !important; }
+[data-bs-theme="dark"] .bg-warning-subtle { color: var(--bs-body-color); }
+[data-bs-theme="dark"] .table-light {
+    --bs-table-bg: var(--bs-tertiary-bg);
+    --bs-table-color: var(--bs-body-color);
+    --bs-table-border-color: var(--bs-border-color);
+    --bs-table-striped-bg: var(--bs-tertiary-bg);
+    --bs-table-hover-bg: var(--bs-secondary-bg);
+    color: var(--bs-body-color);
+}

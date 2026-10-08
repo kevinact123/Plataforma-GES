@@ -12,6 +12,7 @@ class RegistroGesDocumento extends Model
     protected $primaryKey = 'id_documento';
 
     public const CREATED_AT = 'fecha_creacion';
+
     public const UPDATED_AT = 'fecha_actualizacion';
 
     protected $fillable = [

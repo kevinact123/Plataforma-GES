@@ -9,9 +9,9 @@ class EnsureAdmin
 {
     public function handle(Request $request, Closure $next): mixed
     {
-        if (!$request->user()?->esAdmin()) {
+        if (! $request->user()?->hasPermission('administrar_usuarios')) {
             return response()->json([
-                'message' => 'Solo los administradores pueden realizar esta acción.',
+                'message' => 'No tienes permiso para administrar usuarios.',
             ], 403);
         }
 

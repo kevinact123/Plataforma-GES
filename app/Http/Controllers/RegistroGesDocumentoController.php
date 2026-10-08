@@ -7,7 +7,7 @@ use App\Models\RegistroGesDocumento;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class RegistroGesDocumentoController extends Controller
 {
@@ -42,7 +42,7 @@ class RegistroGesDocumentoController extends Controller
 
         $archivo = $validated['documento'];
         $nombreArchivo = $this->generarNombreArchivo($archivo);
-        $ruta = $archivo->storeAs('registros-ges/' . $registro->id_registro, $nombreArchivo, 'local');
+        $ruta = $archivo->storeAs('registros-ges/'.$registro->id_registro, $nombreArchivo, 'local');
 
         $documento = $registro->documentos()->create([
             'nombre_original' => $archivo->getClientOriginalName(),
@@ -59,7 +59,7 @@ class RegistroGesDocumentoController extends Controller
         ], 201);
     }
 
-    public function download(Request $request, RegistroGes $registro, RegistroGesDocumento $documento): StreamedResponse|JsonResponse
+    public function download(Request $request, RegistroGes $registro, RegistroGesDocumento $documento): BinaryFileResponse|JsonResponse
     {
         $this->authorizeRegistro($request, $registro, 'view');
 
@@ -67,11 +67,15 @@ class RegistroGesDocumentoController extends Controller
             return response()->json(['message' => 'Documento no encontrado para este registro.'], 404);
         }
 
-        if (!Storage::disk('local')->exists($documento->ruta_archivo)) {
+        if (! Storage::disk('local')->exists($documento->ruta_archivo)) {
             return response()->json(['message' => 'El archivo ya no existe en almacenamiento.'], 404);
         }
 
-        return Storage::disk('local')->download($documento->ruta_archivo, $documento->nombre_original);
+        $rutaCompleta = Storage::disk('local')->path($documento->ruta_archivo);
+
+        return response()->download($rutaCompleta, $documento->nombre_original, [
+            'Content-Type' => $documento->mime_type ?? 'application/octet-stream',
+        ]);
     }
 
     public function destroy(Request $request, RegistroGes $registro, RegistroGesDocumento $documento): JsonResponse
@@ -93,7 +97,7 @@ class RegistroGesDocumentoController extends Controller
         ]);
     }
 
-    private function authorizeRegistro(Request $request, RegistroGes $registro): void
+    private function authorizeRegistro(Request $request, RegistroGes $registro, string $ability = 'view'): void
     {
         if (! $request->user() || $request->user()->cannot($ability, $registro)) {
             abort(403, 'No tienes permiso para gestionar documentación de este registro.');

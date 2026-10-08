@@ -2,6 +2,4 @@
 
 namespace App\Http\Controllers;
 
-class HistorialController extends Controller
-{
-}
+class HistorialController extends Controller {}

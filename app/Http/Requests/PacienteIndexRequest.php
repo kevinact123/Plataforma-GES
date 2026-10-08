@@ -15,6 +15,7 @@ class PacienteIndexRequest extends FormRequest
     {
         return [
             'rut' => ['nullable', 'string', 'max:20'],
+            'nombre' => ['nullable', 'string', 'max:150'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ];
     }

@@ -2,17 +2,16 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Requests\HitoCrearRequest;
-use App\Http\Requests\HitoIniciarRequest;
 use App\Http\Requests\HitoCompletarRequest;
+use App\Http\Requests\HitoCrearRequest;
+use App\Http\Requests\HitoEstadoRequest;
+use App\Http\Requests\HitoIniciarRequest;
 use App\Services\HitoService;
 use Illuminate\Http\JsonResponse;
 
 class HitoController extends Controller
 {
-    public function __construct(private readonly HitoService $service)
-    {
-    }
+    public function __construct(private readonly HitoService $service) {}
 
     public function crear(int $registro, HitoCrearRequest $request): JsonResponse
     {
@@ -38,6 +37,24 @@ class HitoController extends Controller
 
         return response()->json([
             'data' => $hito->fresh(['registroGes', 'usuario']),
+        ]);
+    }
+
+    public function cambiarEstado(int $idHito, HitoEstadoRequest $request): JsonResponse
+    {
+        $hito = $this->service->cambiarEstado($request->user(), $idHito, $request->validated());
+
+        return response()->json([
+            'data' => $hito->fresh(['registroGes', 'usuario']),
+        ]);
+    }
+
+    public function eliminar(int $idHito): JsonResponse
+    {
+        $this->service->eliminar(request()->user(), $idHito);
+
+        return response()->json([
+            'message' => 'Hito eliminado correctamente.',
         ]);
     }
 

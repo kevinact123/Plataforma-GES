@@ -22,6 +22,18 @@
     <div class="col-6 col-lg-3"><div class="card shadow-sm border-start border-4 border-primary h-100"><div class="card-body"><div class="small text-muted">Registros con hitos</div><strong class="display-6 text-primary" id="record-count">-</strong></div></div></div>
 </section>
 
+<section class="card shadow-sm mb-4" aria-labelledby="new-hito-title">
+    <div class="card-header bg-white"><h2 class="h5 mb-0" id="new-hito-title">Agregar hito</h2></div>
+    <div class="card-body">
+        <form id="new-hito-page-form" class="row g-3">
+            <div class="col-md-5"><label class="form-label" for="new-hito-record">Registro GES</label><select class="form-select" id="new-hito-record" required><option value="">Selecciona un registro autorizado</option></select></div>
+            <div class="col-md-4"><label class="form-label" for="new-hito-page-name">Nombre del hito</label><input class="form-control" id="new-hito-page-name" maxlength="200" required></div>
+            <div class="col-md-3"><label class="form-label" for="new-hito-page-observation">Observación</label><input class="form-control" id="new-hito-page-observation" maxlength="1000"></div>
+            <div class="col-12"><button class="btn btn-primary" type="submit"><i class="bi bi-plus-circle me-1" aria-hidden="true"></i>Agregar hito</button></div>
+        </form>
+    </div>
+</section>
+
 <section class="card shadow-sm" aria-labelledby="hitos-list-title">
     <div class="card-header bg-white d-flex flex-wrap justify-content-between align-items-center gap-2">
         <h2 class="h5 mb-0" id="hitos-list-title">Hitos por registro GES</h2>
@@ -63,6 +75,11 @@
     function statusLabel(status) { return { pendiente: 'Pendiente', en_proceso: 'En proceso', completado: 'Completado' }[status] || status; }
     function statusClass(status) { return { pendiente: 'warning', en_proceso: 'info', completado: 'success' }[status] || 'secondary'; }
     function showMessage(text, type = 'success') { hitoMessage.textContent = text; hitoMessage.className = `alert alert-${type}`; }
+    function notifyGlobalDataRefresh() {
+        const timestamp = Date.now().toString();
+        localStorage.setItem('ges-data-updated', timestamp);
+        window.dispatchEvent(new CustomEvent('ges-data-updated', { detail: { timestamp } }));
+    }
 
     async function hitoFetch(url, options = {}) {
         const response = await fetch(url, { ...options, headers: { Accept: 'application/json', ...(options.body ? { 'Content-Type': 'application/json' } : {}), Authorization: `Bearer ${hitoToken}`, ...options.headers } });
@@ -77,9 +94,22 @@
         const visible = records.filter((record) => filter === 'todos' || record.hitos.some((hito) => hito.estado === filter));
         hitoList.innerHTML = visible.map((record) => {
             const patient = record.paciente ? `${record.paciente.nombre} ${record.paciente.apellido_paterno}` : `ID ${record.id_paciente}`;
-            return `<tr><td class="fw-semibold">#${record.id_registro}</td><td>${escapeHtml(patient)}</td><td>${escapeHtml(record.patologia?.nombre)}</td><td><span class="badge text-bg-primary">${record.hitos.length}</span></td><td class="text-end"><button class="btn btn-sm btn-outline-primary" type="button" data-record-id="${record.id_registro}"><i class="bi bi-eye me-1" aria-hidden="true"></i>Ver y gestionar</button></td></tr>`;
+            const pendientes = record.hitos.filter((hito) => hito.estado !== 'completado');
+            const pendientesTexto = pendientes.length
+                ? `<div class="small text-warning mt-1"><i class="bi bi-exclamation-circle me-1" aria-hidden="true"></i>Faltan: ${pendientes.map((hito) => escapeHtml(hito.nombre)).join(', ')}</div>`
+                : '<div class="small text-success mt-1"><i class="bi bi-check-circle me-1" aria-hidden="true"></i>Todos completados</div>';
+            const eliminarBoton = record.puede_eliminar ? `<button class="btn btn-sm btn-outline-danger ms-1" type="button" data-record-delete="${record.id_registro}"><i class="bi bi-trash me-1" aria-hidden="true"></i>Eliminar</button>` : '';
+            return `<tr><td class="fw-semibold">#${record.id_registro}</td><td>${escapeHtml(patient)}</td><td>${escapeHtml(record.patologia?.nombre)}</td><td><span class="badge text-bg-primary">${record.hitos.length}</span>${pendientesTexto}</td><td class="text-end"><button class="btn btn-sm btn-outline-primary" type="button" data-record-id="${record.id_registro}"><i class="bi bi-eye me-1" aria-hidden="true"></i>Ver y gestionar</button>${eliminarBoton}</td></tr>`;
         }).join('');
         document.getElementById('hitos-empty').classList.toggle('d-none', visible.length > 0);
+    }
+
+    function renderRecordOptions() {
+        const select = document.getElementById('new-hito-record');
+        select.innerHTML = '<option value="">Selecciona un registro autorizado</option>' + records.map((record) => {
+            const patient = record.paciente ? `${record.paciente.nombre} ${record.paciente.apellido_paterno}` : `Paciente #${record.id_paciente}`;
+            return `<option value="${record.id_registro}">#${record.id_registro} - ${escapeHtml(patient)} - ${escapeHtml(record.patologia?.nombre)}</option>`;
+        }).join('');
     }
 
     function renderSummary() {
@@ -99,9 +129,10 @@
             records.length = 0;
             for (const record of response.data || []) {
                 const hitoResponse = await hitoFetch(`{{ url('/api/registros-ges') }}/${record.id_registro}/hitos`);
-                records.push({ ...record, hitos: hitoResponse?.data || [] });
+                const hitos = hitoResponse?.data || [];
+                records.push({ ...record, hitos });
             }
-            renderSummary(); renderList();
+            renderRecordOptions(); renderSummary(); renderList();
         } catch (error) { showMessage(error.message, 'danger'); } finally { hitoLoading.classList.add('d-none'); }
     }
 
@@ -109,7 +140,11 @@
         const record = currentRecord;
         document.getElementById('hito-modal-title').textContent = `Hitos del registro #${record.id_registro}`;
         document.getElementById('hito-modal-subtitle').textContent = record.paciente ? `${record.paciente.nombre} ${record.paciente.apellido_paterno}` : `Paciente #${record.id_paciente}`;
-        const items = record.hitos.length ? `<div class="list-group mb-4">${record.hitos.map((hito) => `<div class="list-group-item"><div class="d-flex justify-content-between align-items-start gap-3"><div><strong>${escapeHtml(hito.nombre)}</strong><div class="small text-muted">Responsable: ${escapeHtml(hito.usuario?.nombre ? `${hito.usuario.nombre} ${hito.usuario.apellido}` : 'No informado')}</div></div><span class="badge text-bg-${statusClass(hito.estado)}">${statusLabel(hito.estado)}</span></div><div class="small mt-2">${escapeHtml(hito.observacion || 'Sin observaciones')}</div><div class="mt-2">${hito.estado !== 'completado' ? `<button class="btn btn-sm btn-outline-info me-1" type="button" data-hito-action="${hito.estado === 'pendiente' ? 'iniciar' : 'completar'}" data-hito-id="${hito.id_hito}">${hito.estado === 'pendiente' ? 'Iniciar' : 'Completar'}</button>` : ''}</div></div>`).join('')}</div>` : '<p class="text-muted">Este registro no tiene hitos.</p>';
+        const pendientes = record.hitos.filter((hito) => hito.estado !== 'completado');
+        const resumen = record.hitos.length
+            ? `<div class="alert ${pendientes.length ? 'alert-warning' : 'alert-success'} py-2"><i class="bi ${pendientes.length ? 'bi-hourglass-split' : 'bi-check-circle'} me-1" aria-hidden="true"></i>${pendientes.length ? `Faltan ${pendientes.length} hito(s): ${pendientes.map((hito) => escapeHtml(hito.nombre)).join(', ')}` : 'Todos los hitos están completados.'}</div>`
+            : '';
+        const items = record.hitos.length ? `${resumen}<div class="list-group mb-4">${record.hitos.map((hito) => `<div class="list-group-item"><div class="d-flex justify-content-between align-items-start gap-3"><div class="d-flex gap-2"><input class="form-check-input mt-1 hito-complete-checkbox" type="checkbox" data-hito-checkbox="${hito.id_hito}" ${hito.estado === 'completado' ? 'checked' : ''} aria-label="Marcar ${escapeHtml(hito.nombre)} como completado"><div><strong>${escapeHtml(hito.nombre)}</strong><div class="small text-muted">Responsable: ${escapeHtml(hito.usuario?.nombre ? `${hito.usuario.nombre} ${hito.usuario.apellido}` : 'No informado')}</div></div></div><span class="badge text-bg-${statusClass(hito.estado)}">${statusLabel(hito.estado)}</span></div><div class="small mt-2">${escapeHtml(hito.observacion || 'Sin observaciones')}</div><div class="mt-3 row g-2 align-items-end"><div class="col"><label class="form-label small mb-1">Estado</label><select class="form-select form-select-sm" data-hito-state-select="${hito.id_hito}"><option value="pendiente" ${hito.estado === 'pendiente' ? 'selected' : ''}>Pendiente</option><option value="en_proceso" ${hito.estado === 'en_proceso' ? 'selected' : ''}>En proceso</option><option value="completado" ${hito.estado === 'completado' ? 'selected' : ''}>Completado</option></select></div><div class="col-auto"><button class="btn btn-sm btn-primary" type="button" data-hito-action="set-status" data-hito-id="${hito.id_hito}">Guardar</button></div><div class="col-auto"><button class="btn btn-sm btn-outline-danger" type="button" data-hito-delete="${hito.id_hito}">Eliminar</button></div></div></div>`).join('')}</div>` : '<p class="text-muted">Este registro no tiene hitos.</p>';
         document.getElementById('hito-modal-body').innerHTML = `${items}<form id="new-hito-form" class="border-top pt-3"><h3 class="h6">Agregar hito</h3><div class="row g-2"><div class="col-md-8"><label class="form-label" for="new-hito-name">Nombre</label><input class="form-control" id="new-hito-name" name="nombre" maxlength="200" required></div><div class="col-md-4"><label class="form-label" for="new-hito-observation">Observación</label><input class="form-control" id="new-hito-observation" name="observacion" maxlength="1000"></div><div class="col-12"><button class="btn btn-primary" type="submit"><i class="bi bi-plus-circle me-1" aria-hidden="true"></i>Agregar hito</button></div></div></form>`;
         document.getElementById('new-hito-form').addEventListener('submit', createHito);
     }
@@ -124,19 +159,97 @@
 
     async function createHito(event) {
         event.preventDefault(); const form = new FormData(event.target);
-        try { await hitoFetch(`{{ url('/api/registros-ges') }}/${currentRecord.id_registro}/hitos`, { method: 'POST', body: JSON.stringify({ nombre: form.get('nombre'), observacion: form.get('observacion') }) }); showMessage('Hito creado correctamente.'); await refreshRecord(); } catch (error) { showMessage(error.message, 'danger'); }
+        try { await hitoFetch(`{{ url('/api/registros-ges') }}/${currentRecord.id_registro}/hitos`, { method: 'POST', body: JSON.stringify({ nombre: form.get('nombre'), observacion: form.get('observacion') }) }); showMessage('Hito creado correctamente.'); await refreshRecord(); notifyGlobalDataRefresh(); } catch (error) { showMessage(error.message, 'danger'); }
     }
 
     async function updateHito(hitoId, action) {
-        const observation = window.prompt(action === 'iniciar' ? 'Observación de inicio:' : 'Observación de finalización:', '');
-        if (observation === null) return;
-        try { await hitoFetch(`{{ url('/api/hitos') }}/${hitoId}/${action}`, { method: 'POST', body: JSON.stringify({ observacion: observation }) }); showMessage(`Hito ${action === 'iniciar' ? 'iniciado' : 'completado'} correctamente.`); await refreshRecord(); } catch (error) { showMessage(error.message, 'danger'); }
+        const observation = '';
+
+        try {
+            if (action === 'iniciar' || action === 'completar') {
+                await hitoFetch(`{{ url('/api/hitos') }}/${hitoId}/${action}`, { method: 'POST', body: JSON.stringify({ observacion: observation || undefined }) });
+                showMessage(`Hito ${action === 'iniciar' ? 'iniciado' : 'completado'} correctamente.`);
+            } else {
+                await hitoFetch(`{{ url('/api/hitos') }}/${hitoId}/estado`, { method: 'POST', body: JSON.stringify({ estado: action, observacion: observation || undefined }) });
+                showMessage(`Estado actualizado a ${statusLabel(action)}.`);
+            }
+            await refreshRecord();
+            notifyGlobalDataRefresh();
+        } catch (error) { showMessage(error.message, 'danger'); }
     }
 
-    document.getElementById('refresh-hitos').addEventListener('click', loadHitos);
+    async function deleteHito(hitoId) {
+        if (!window.confirm('¿Seguro que quieres eliminar este hito?')) return;
+        try {
+            await hitoFetch(`{{ url('/api/hitos') }}/${hitoId}`, { method: 'DELETE' });
+            showMessage('Hito eliminado correctamente.');
+            await refreshRecord();
+            notifyGlobalDataRefresh();
+        } catch (error) { showMessage(error.message, 'danger'); }
+    }
+
+    document.getElementById('refresh-hitos').addEventListener('click', async (event) => {
+        const button = event.currentTarget;
+        if (button.disabled) return;
+        const label = button.innerHTML;
+        button.disabled = true;
+        button.setAttribute('aria-busy', 'true');
+        button.innerHTML = '<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>Actualizando...';
+        try { await loadHitos(); } finally { button.disabled = false; button.removeAttribute('aria-busy'); button.innerHTML = label; }
+    });
+    document.getElementById('new-hito-page-form').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const recordId = Number(document.getElementById('new-hito-record').value);
+        try {
+            await hitoFetch(`{{ url('/api/registros-ges') }}/${recordId}/hitos`, { method: 'POST', body: JSON.stringify({ nombre: document.getElementById('new-hito-page-name').value, observacion: document.getElementById('new-hito-page-observation').value || undefined }) });
+            event.target.reset();
+            showMessage('Hito creado correctamente.');
+            await loadHitos();
+            notifyGlobalDataRefresh();
+        } catch (error) { showMessage(error.message, 'danger'); }
+    });
     document.getElementById('hito-filter').addEventListener('change', renderList);
-    hitoList.addEventListener('click', (event) => { const button = event.target.closest('[data-record-id]'); if (!button) return; currentRecord = records.find((record) => record.id_registro === Number(button.dataset.recordId)); renderModal(); hitoModal.show(); });
-    document.getElementById('hito-modal-body').addEventListener('click', (event) => { const button = event.target.closest('[data-hito-action]'); if (button) updateHito(Number(button.dataset.hitoId), button.dataset.hitoAction); });
+    hitoList.addEventListener('click', (event) => {
+        const deleteRecordButton = event.target.closest('[data-record-delete]');
+        if (deleteRecordButton) {
+            deleteRegistro(Number(deleteRecordButton.dataset.recordDelete));
+            return;
+        }
+        const button = event.target.closest('[data-record-id]'); if (!button) return; currentRecord = records.find((record) => record.id_registro === Number(button.dataset.recordId)); renderModal(); hitoModal.show();
+    });
+
+    async function deleteRegistro(registroId) {
+        if (!window.confirm('¿Seguro que quieres eliminar este registro GES? Se eliminarán también sus hitos.')) return;
+        try {
+            await hitoFetch(`{{ url('/api/registros-ges') }}/${registroId}`, { method: 'DELETE' });
+            showMessage('Registro eliminado correctamente.');
+            await loadHitos();
+            notifyGlobalDataRefresh();
+        } catch (error) { showMessage(error.message, 'danger'); }
+    }
+    document.getElementById('hito-modal-body').addEventListener('click', (event) => {
+        const actionButton = event.target.closest('[data-hito-action]');
+        if (actionButton) {
+            if (actionButton.dataset.hitoAction === 'set-status') {
+                const select = document.querySelector(`[data-hito-state-select="${actionButton.dataset.hitoId}"]`);
+                if (select) {
+                    updateHito(Number(actionButton.dataset.hitoId), select.value);
+                }
+                return;
+            }
+            updateHito(Number(actionButton.dataset.hitoId), actionButton.dataset.hitoAction);
+            return;
+        }
+        const deleteButton = event.target.closest('[data-hito-delete]');
+        if (deleteButton) {
+            deleteHito(Number(deleteButton.dataset.hitoDelete));
+        }
+    });
+    document.getElementById('hito-modal-body').addEventListener('change', (event) => {
+        const checkbox = event.target.closest('[data-hito-checkbox]');
+        if (!checkbox) return;
+        updateHito(Number(checkbox.dataset.hitoCheckbox), checkbox.checked ? 'completado' : 'pendiente');
+    });
     loadHitos();
 </script>
 @endsection

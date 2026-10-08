@@ -6,19 +6,20 @@ use App\Models\Patologia;
 use App\Models\PermisoPatologia;
 use App\Models\Rol;
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class PatologiaApiTest extends TestCase
 {
-    use RefreshDatabase;
+    use DatabaseTransactions;
 
     protected function setUp(): void
     {
         parent::setUp();
 
         $this->createPatologiaSchema();
+        $this->createRolePermissionSchema();
     }
 
     public function test_list_patologias_returns_active_and_visible_entries(): void
@@ -27,6 +28,7 @@ class PatologiaApiTest extends TestCase
             'nombre' => 'digitadora',
             'descripcion' => 'Digitadora',
         ]);
+        $this->grantDefaultRolePermissions($role);
 
         $user = User::create([
             'nombre' => 'Maria',
@@ -34,10 +36,11 @@ class PatologiaApiTest extends TestCase
             'username' => 'maria.digitadora',
             'password' => bcrypt('secret123'),
             'id_rol' => $role->id_rol,
+            'tipo_digitadora' => User::TIPO_DIGITADORA_CONFIDENCIAL,
             'activo' => true,
         ]);
 
-        Patologia::create([
+        $publica = Patologia::create([
             'numero_ges' => 1,
             'nombre' => 'Patología pública',
             'descripcion' => 'No confidencial',
@@ -61,6 +64,14 @@ class PatologiaApiTest extends TestCase
             'puede_asignar' => false,
         ]);
 
+        PermisoPatologia::create([
+            'id_usuario' => $user->id_usuario,
+            'id_patologia' => $publica->id_patologia,
+            'puede_ver' => true,
+            'puede_editar' => false,
+            'puede_asignar' => false,
+        ]);
+
         $response = $this->actingAs($user, 'sanctum')
             ->getJson('/api/patologias');
 
@@ -75,6 +86,7 @@ class PatologiaApiTest extends TestCase
             'nombre' => 'digitadora',
             'descripcion' => 'Digitadora',
         ]);
+        $this->grantDefaultRolePermissions($role);
 
         $user = User::create([
             'nombre' => 'Pedro',
@@ -109,6 +121,7 @@ class PatologiaApiTest extends TestCase
         Schema::create('usuarios', function ($table): void {
             $table->id('id_usuario');
             $table->unsignedBigInteger('id_rol')->nullable();
+            $table->string('tipo_digitadora')->nullable();
             $table->string('nombre');
             $table->string('apellido');
             $table->string('username')->unique();
@@ -151,6 +164,7 @@ class PatologiaApiTest extends TestCase
         });
 
         Schema::create('registros_ges', function ($table): void {
+            $table->timestamp('eliminado_en')->nullable();
             $table->id('id_registro');
             $table->unsignedBigInteger('id_paciente');
             $table->unsignedBigInteger('id_patologia');

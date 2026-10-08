@@ -10,7 +10,7 @@ use App\Models\RegistroGes;
 use App\Models\Rol;
 use App\Models\TipoRegistro;
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
@@ -18,12 +18,14 @@ use Tests\TestCase;
 
 class RegistroGesDocumentacionApiTest extends TestCase
 {
-    use RefreshDatabase;
+    use DatabaseTransactions;
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->createRegistroGesSchema();
+        $this->createRolePermissionSchema();
+        $this->createDocumentTables();
         Storage::fake('local');
     }
 
@@ -145,12 +147,61 @@ class RegistroGesDocumentacionApiTest extends TestCase
             ->assertJsonPath('data.0.estado', 'Completado');
     }
 
+    public function test_can_assign_general_document_using_record_pathology_and_persist_responsible(): void
+    {
+        $digitadora = $this->createUserWithAccess();
+        $patologia = Patologia::query()->latest('id_patologia')->firstOrFail();
+        PermisoPatologia::query()
+            ->where('id_usuario', $digitadora->id_usuario)
+            ->where('id_patologia', $patologia->id_patologia)
+            ->update(['puede_asignar' => true]);
+
+        $adminRole = Rol::create(['nombre' => 'Administrador', 'descripcion' => 'Administrador']);
+        $this->grantDefaultRolePermissions($adminRole);
+        $admin = User::create([
+            'nombre' => 'Admin',
+            'apellido' => 'Documentos',
+            'username' => 'admin.documentos',
+            'password' => bcrypt('secret123'),
+            'id_rol' => $adminRole->id_rol,
+            'activo' => true,
+        ]);
+        $paciente = Paciente::create([
+            'rut' => '33.333.333-3',
+            'nombre' => 'Eva',
+            'apellido_paterno' => 'Rojas',
+            'activo' => true,
+        ]);
+        $registro = RegistroGes::create([
+            'id_paciente' => $paciente->id_paciente,
+            'id_patologia' => $patologia->id_patologia,
+            'id_prioridad' => Prioridad::first()->id_prioridad,
+            'id_tipo_registro' => TipoRegistro::first()->id_tipo_registro,
+            'estado' => 'Pendiente',
+        ]);
+
+        $documento = $this->actingAs($admin, 'sanctum')
+            ->postJson('/api/documentacion', [
+                'documento' => UploadedFile::fake()->create('asignable.pdf', 10, 'application/pdf'),
+                'id_registro' => $registro->id_registro,
+            ])
+            ->assertCreated()
+            ->json('data.id_documento');
+
+        $this->actingAs($admin, 'sanctum')
+            ->postJson('/api/documentacion/' . $documento . '/asignacion-automatica')
+            ->assertOk()
+            ->assertJsonPath('data.id_usuario_asignado', $digitadora->id_usuario)
+            ->assertJsonPath('data.estado_asignacion', 'activa');
+    }
+
     private function createUserWithAccess(): User
     {
         $role = Rol::create([
             'nombre' => 'digitadora',
             'descripcion' => 'Digitadora',
         ]);
+        $this->grantDefaultRolePermissions($role);
 
         $user = User::create([
             'nombre' => 'Test',
@@ -191,6 +242,7 @@ class RegistroGesDocumentacionApiTest extends TestCase
         Schema::create('usuarios', function ($table): void {
             $table->id('id_usuario');
             $table->unsignedBigInteger('id_rol');
+            $table->string('tipo_digitadora')->nullable();
             $table->string('nombre');
             $table->string('apellido');
             $table->string('username')->unique();
@@ -236,6 +288,7 @@ class RegistroGesDocumentacionApiTest extends TestCase
         });
 
         Schema::create('registros_ges', function ($table): void {
+            $table->timestamp('eliminado_en')->nullable();
             $table->id('id_registro');
             $table->unsignedBigInteger('id_paciente');
             $table->unsignedBigInteger('id_patologia');

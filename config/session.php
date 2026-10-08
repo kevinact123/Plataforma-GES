@@ -38,6 +38,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Tiempo de Inactividad (Cierre Automático de Sesión)
+    |--------------------------------------------------------------------------
+    |
+    | Segundos de inactividad tras los cuales el token de acceso (Sanctum) se
+    | considera expirado y la sesión se cierra automáticamente. Valor final
+    | de producción: 840 segundos (14 minutos).
+    |
+    */
+
+    'inactivity_timeout' => (int) env('SESSION_INACTIVITY_TIMEOUT', 840),
+
+    /*
+    |--------------------------------------------------------------------------
     | Session Encryption
     |--------------------------------------------------------------------------
     |

@@ -19,6 +19,14 @@ class AsignacionResource extends JsonResource
             'fecha_finalizacion' => $this->fecha_finalizacion?->toISOString(),
             'estado' => $this->estado,
             'observacion' => $this->observacion,
+            'usuario' => $this->whenLoaded('usuario', fn () => [
+                'id_usuario' => $this->usuario->id_usuario,
+                'nombre' => trim($this->usuario->nombre.' '.$this->usuario->apellido),
+            ]),
+            'asignador' => $this->whenLoaded('asignador', fn () => [
+                'id_usuario' => $this->asignador->id_usuario,
+                'nombre' => trim($this->asignador->nombre.' '.$this->asignador->apellido),
+            ]),
         ];
     }
 }

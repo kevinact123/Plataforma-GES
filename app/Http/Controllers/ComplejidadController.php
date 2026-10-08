@@ -8,13 +8,16 @@ use Illuminate\Http\Request;
 
 class ComplejidadController extends Controller
 {
-    public function __construct(private readonly ComplejidadService $service)
-    {
-    }
+    public function __construct(private readonly ComplejidadService $service) {}
 
     public function index(Request $request): JsonResponse
     {
         return response()->json($this->service->consultar($request->user()));
+    }
+
+    public function store(Request $request): JsonResponse
+    {
+        return response()->json($this->service->guardar($request->user(), $request->all()), 201);
     }
 
     public function promedioPorTipo(Request $request): JsonResponse

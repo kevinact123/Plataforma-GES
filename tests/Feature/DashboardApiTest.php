@@ -12,19 +12,20 @@ use App\Models\RegistroGes;
 use App\Models\Rol;
 use App\Models\TipoRegistro;
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class DashboardApiTest extends TestCase
 {
-    use RefreshDatabase;
+    use DatabaseTransactions;
 
     protected function setUp(): void
     {
         parent::setUp();
 
         $this->createDashboardSchema();
+        $this->createRolePermissionSchema();
     }
 
     public function test_dashboard_endpoints_return_summary_and_distributions(): void
@@ -60,6 +61,16 @@ class DashboardApiTest extends TestCase
             'apellido_materno' => 'Pinto',
             'fecha_nacimiento' => '1995-07-12',
             'sexo' => 'F',
+            'activo' => true,
+        ]);
+
+        $paciente4 = Paciente::create([
+            'rut' => '44444444-4',
+            'nombre' => 'Pablo',
+            'apellido_paterno' => 'Muñoz',
+            'apellido_materno' => 'Salas',
+            'fecha_nacimiento' => '1998-02-18',
+            'sexo' => 'M',
             'activo' => true,
         ]);
 
@@ -150,6 +161,15 @@ class DashboardApiTest extends TestCase
             'observacion' => 'Completada',
         ]);
 
+        Asignacion::create([
+            'id_registro' => $registro3->id_registro,
+            'id_usuario' => $operador2->id_usuario,
+            'asignado_por' => $admin->id_usuario,
+            'fecha_asignacion' => now(),
+            'estado' => 'activa',
+            'observacion' => 'Asignación activa',
+        ]);
+
         Hito::create([
             'id_registro' => $registro1->id_registro,
             'id_usuario' => $operador1->id_usuario,
@@ -168,15 +188,24 @@ class DashboardApiTest extends TestCase
             'observacion' => 'Completado',
         ]);
 
+        Hito::create([
+            'id_registro' => $registro3->id_registro,
+            'id_usuario' => $operador1->id_usuario,
+            'nombre' => 'Revisión en curso',
+            'estado' => 'en_proceso',
+            'fecha_inicio' => now(),
+            'observacion' => 'En proceso',
+        ]);
+
         $this->actingAs($admin, 'sanctum')
             ->getJson('/api/dashboard/resumen')
             ->assertOk()
-            ->assertJsonPath('total_pacientes', 3)
+            ->assertJsonPath('total_pacientes', 4)
             ->assertJsonPath('total_registros', 3)
             ->assertJsonPath('registros_pendientes', 2)
             ->assertJsonPath('registros_en_proceso', 1)
             ->assertJsonPath('registros_completados', 1)
-            ->assertJsonPath('registros_sin_asignar', 1);
+            ->assertJsonPath('registros_sin_asignar', 0);
 
         $this->actingAs($admin, 'sanctum')
             ->getJson('/api/dashboard/distribuciones')
@@ -187,12 +216,14 @@ class DashboardApiTest extends TestCase
         $this->actingAs($admin, 'sanctum')
             ->getJson('/api/dashboard/carga-operadores')
             ->assertOk()
-            ->assertJsonFragment(['nombre' => 'Carmen Test']);
+            ->assertJsonFragment(['nombre' => 'Carmen Test', 'total_activas' => 1])
+            ->assertJsonFragment(['nombre' => 'Carolina Test', 'total_activas' => 1]);
 
         $this->actingAs($admin, 'sanctum')
             ->getJson('/api/dashboard/hitos')
             ->assertOk()
             ->assertJsonPath('pendientes', 1)
+            ->assertJsonPath('en_proceso', 1)
             ->assertJsonPath('completados', 1);
     }
 
@@ -202,6 +233,7 @@ class DashboardApiTest extends TestCase
             'nombre' => $rolNombre,
             'descripcion' => $descripcion,
         ]);
+        $this->grantDefaultRolePermissions($role);
 
         return User::create([
             'nombre' => $nombre,
@@ -224,6 +256,7 @@ class DashboardApiTest extends TestCase
         Schema::create('usuarios', function ($table): void {
             $table->id('id_usuario');
             $table->unsignedBigInteger('id_rol')->nullable();
+            $table->string('tipo_digitadora')->nullable();
             $table->string('nombre');
             $table->string('apellido');
             $table->string('username')->unique();
@@ -278,6 +311,7 @@ class DashboardApiTest extends TestCase
         });
 
         Schema::create('registros_ges', function ($table): void {
+            $table->timestamp('eliminado_en')->nullable();
             $table->id('id_registro');
             $table->unsignedBigInteger('id_paciente');
             $table->unsignedBigInteger('id_patologia');

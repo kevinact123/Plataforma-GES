@@ -6,10 +6,17 @@ use App\Services\RegistroGesAuditService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Schema;
 
 class RegistroGes extends Model
 {
+    use SoftDeletes;
+
+    public const DELETED_AT = 'eliminado_en';
+
     public const ESTADO_PENDIENTE = 'Pendiente';
 
     protected $table = 'registros_ges';
@@ -44,27 +51,17 @@ class RegistroGes extends Model
 
     public function scopeVisibleTo(Builder $query, User $user): Builder
     {
-        if (!$user->activo) {
+        if (! $user->hasPermission('ver_registros')) {
             return $query->whereKey(-1);
         }
 
-        if ($user->esAdmin()) {
+        if ($user->esAdmin() || ! $user->hasRole('digitadora')) {
             return $query->whereHas('patologia', fn (Builder $patologiaQuery) => $patologiaQuery->where('activo', true));
         }
 
-        $patologiasPermitidas = $user->permisosPatologia()
-            ->where('puede_ver', true)
-            ->select('id_patologia');
-
-        return $query->whereHas('patologia', function (Builder $patologiaQuery) use ($patologiasPermitidas): void {
-            $patologiaQuery
-                ->where('activo', true)
-                ->where(function (Builder $visibilityQuery) use ($patologiasPermitidas): void {
-                    $visibilityQuery
-                        ->where('confidencial', false)
-                        ->orWhereIn('id_patologia', $patologiasPermitidas);
-                });
-        });
+        return $query->whereHas('patologia', fn (Builder $patologiaQuery) => $patologiaQuery
+            ->where('activo', true)
+            ->visibleTo($user));
     }
 
     public function scopeByPriority(Builder $query, int $priorityId): Builder
@@ -142,6 +139,28 @@ class RegistroGes extends Model
         return $this->hasMany(RegistroGesDocumento::class, 'id_registro', 'id_registro');
     }
 
+    public function documentosGenerales(): HasMany
+    {
+        return $this->hasMany(DocumentoGeneral::class, 'id_registro', 'id_registro');
+    }
+
+    public function asociacionesPatologia(): HasMany
+    {
+        return $this->hasMany(RegistroGesPatologia::class, 'id_registro', 'id_registro');
+    }
+
+    public function patologiasAsociadas(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            Patologia::class,
+            'registro_ges_patologias',
+            'id_registro',
+            'id_patologia',
+            'id_registro',
+            'id_patologia',
+        )->withPivot(['id_registro_patologia', 'tipo', 'observacion', 'fecha_creacion', 'fecha_actualizacion']);
+    }
+
     protected static function booted(): void
     {
         static::created(function (self $registro): void {
@@ -173,6 +192,12 @@ class RegistroGes extends Model
                     $valorAnterior,
                     $valorNuevo,
                 );
+            }
+        });
+
+        static::deleting(function (self $registro): void {
+            if (Schema::hasTable('registro_ges_patologias')) {
+                $registro->asociacionesPatologia()->delete();
             }
         });
     }

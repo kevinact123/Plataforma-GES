@@ -47,4 +47,9 @@ class Asignacion extends Model
     {
         return $this->belongsTo(User::class, 'asignado_por', 'id_usuario');
     }
+
+    public function scopeActivas($query)
+    {
+        return $query->where('estado', 'activa');
+    }
 }

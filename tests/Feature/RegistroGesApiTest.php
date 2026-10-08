@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Asignacion;
+use App\Models\Hito;
 use App\Models\Paciente;
 use App\Models\Patologia;
 use App\Models\PermisoPatologia;
@@ -11,20 +12,22 @@ use App\Models\RegistroGes;
 use App\Models\Rol;
 use App\Models\TipoRegistro;
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class RegistroGesApiTest extends TestCase
 {
-    use RefreshDatabase;
+    use DatabaseTransactions;
 
     protected function setUp(): void
     {
         parent::setUp();
 
         $this->createRegistroGesSchema();
+        $this->createRolePermissionSchema();
+        $this->createDocumentTables();
     }
 
     public function test_can_list_and_filter_registros_ges(): void
@@ -104,6 +107,11 @@ class RegistroGesApiTest extends TestCase
             ->assertJsonFragment(['estado' => 'Asignado']);
 
         $this->actingAs($user, 'sanctum')
+            ->getJson('/api/registros-ges/' . $registroPendiente->id_registro)
+            ->assertOk()
+            ->assertJsonPath('data.puede_ver', true);
+
+        $this->actingAs($user, 'sanctum')
             ->getJson('/api/registros-ges/pendientes')
             ->assertOk()
             ->assertJsonFragment(['id_registro' => $registroPendiente->id_registro]);
@@ -122,6 +130,189 @@ class RegistroGesApiTest extends TestCase
             ->getJson('/api/registros-ges?id_prioridad=' . $prioridad1->id_prioridad . '&id_patologia=' . $patologia->id_patologia . '&id_tipo_registro=' . $tipo1->id_tipo_registro . '&estado=Pendiente')
             ->assertOk()
             ->assertJsonFragment(['id_registro' => $registroPendiente->id_registro]);
+    }
+
+    public function test_can_list_add_update_and_remove_associated_pathologies(): void
+    {
+        $user = $this->createUserWithAccess();
+        PermisoPatologia::query()
+            ->where('id_usuario', $user->id_usuario)
+            ->update(['puede_editar' => true]);
+        $paciente = Paciente::create([
+            'rut' => '33.333.333-3',
+            'nombre' => 'Paciente',
+            'apellido_paterno' => 'Asociado',
+            'activo' => true,
+        ]);
+        $principal = Patologia::first();
+        $asociada = Patologia::create([
+            'numero_ges' => 999,
+            'nombre' => 'Complicación de prueba',
+            'activo' => true,
+        ]);
+        PermisoPatologia::create([
+            'id_usuario' => $user->id_usuario,
+            'id_patologia' => $asociada->id_patologia,
+            'puede_ver' => true,
+            'puede_editar' => true,
+            'puede_asignar' => false,
+        ]);
+        $registro = RegistroGes::create([
+            'id_paciente' => $paciente->id_paciente,
+            'id_patologia' => $principal->id_patologia,
+            'id_prioridad' => Prioridad::first()->id_prioridad,
+            'id_tipo_registro' => TipoRegistro::first()->id_tipo_registro,
+            'estado' => 'Pendiente',
+        ]);
+
+        $response = $this->actingAs($user, 'sanctum')->postJson(
+            "/api/registros-ges/{$registro->id_registro}/patologias-asociadas",
+            ['id_patologia' => $asociada->id_patologia, 'tipo' => 'complicacion', 'observacion' => 'Control'],
+        );
+        $response->assertCreated()->assertJsonPath('data.id_patologia', $asociada->id_patologia);
+        $idAsociacion = $response->json('data.id_registro_patologia');
+
+        $this->actingAs($user, 'sanctum')
+            ->getJson("/api/registros-ges/{$registro->id_registro}/patologias-asociadas")
+            ->assertOk()
+            ->assertJsonFragment(['observacion' => 'Control']);
+
+        $this->actingAs($user, 'sanctum')
+            ->putJson("/api/registros-ges/{$registro->id_registro}/patologias-asociadas/{$idAsociacion}", ['tipo' => 'enfermedad'])
+            ->assertOk()
+            ->assertJsonPath('data.tipo', 'enfermedad');
+
+        $this->actingAs($user, 'sanctum')
+            ->deleteJson("/api/registros-ges/{$registro->id_registro}/patologias-asociadas/{$idAsociacion}")
+            ->assertOk();
+
+        $this->assertDatabaseMissing('registro_ges_patologias', ['id_registro_patologia' => $idAsociacion]);
+    }
+
+    public function test_digitadora_with_edit_permission_sees_confidential_registro_and_hito(): void
+    {
+        $this->createRegistroGesRelatedTables();
+
+        $user = User::create([
+            'nombre' => 'Daniela',
+            'apellido' => 'Autorizada',
+            'username' => 'daniela.confidencial',
+            'password' => bcrypt('secret123'),
+            'id_rol' => $this->createRoleWithDefaultPermissions('digitadora', 'Digitadora')->id_rol,
+            'tipo_digitadora' => User::TIPO_DIGITADORA_CONFIDENCIAL,
+            'activo' => true,
+        ]);
+
+        $patologia = Patologia::create([
+            'numero_ges' => 220,
+            'nombre' => 'Patología confidencial autorizada',
+            'descripcion' => 'Prueba de acceso por edición',
+            'confidencial' => true,
+            'activo' => true,
+        ]);
+
+        PermisoPatologia::create([
+            'id_usuario' => $user->id_usuario,
+            'id_patologia' => $patologia->id_patologia,
+            'puede_ver' => false,
+            'puede_editar' => true,
+            'puede_asignar' => false,
+        ]);
+
+        $paciente = Paciente::create([
+            'rut' => '44.444.444-4',
+            'nombre' => 'Paciente',
+            'apellido_paterno' => 'Confidencial',
+            'apellido_materno' => 'Prueba',
+            'fecha_nacimiento' => '1990-01-01',
+            'sexo' => 'F',
+            'activo' => true,
+        ]);
+
+        $registro = RegistroGes::create([
+            'id_paciente' => $paciente->id_paciente,
+            'id_patologia' => $patologia->id_patologia,
+            'id_prioridad' => Prioridad::create(['nombre' => 'Normal', 'nivel' => 3])->id_prioridad,
+            'id_tipo_registro' => TipoRegistro::create(['nombre' => 'Consulta', 'activo' => true])->id_tipo_registro,
+            'tipo_tratamiento' => 'Control',
+            'fecha_ingreso' => '2026-08-31',
+            'fecha_limite' => '2026-09-07',
+            'estado' => 'Pendiente',
+            'observaciones' => 'Registro confidencial autorizado',
+        ]);
+
+        $hito = Hito::create([
+            'id_registro' => $registro->id_registro,
+            'id_usuario' => $user->id_usuario,
+            'nombre' => 'Revisar registro confidencial',
+            'estado' => 'pendiente',
+        ]);
+
+        $this->actingAs($user, 'sanctum')
+            ->getJson('/api/registros-ges')
+            ->assertOk()
+            ->assertJsonFragment(['id_registro' => $registro->id_registro]);
+
+        $this->actingAs($user, 'sanctum')
+            ->getJson('/api/registros-ges/' . $registro->id_registro . '/hitos')
+            ->assertOk()
+            ->assertJsonFragment(['id_hito' => $hito->id_hito]);
+    }
+
+    public function test_digitadora_with_view_only_permission_sees_confidential_registro(): void
+    {
+        $this->createRegistroGesRelatedTables();
+
+        $user = User::create([
+            'nombre' => 'Pablo',
+            'apellido' => 'Venites',
+            'username' => 'digitadora.view.only',
+            'password' => bcrypt('secret123'),
+            'id_rol' => $this->createRoleWithDefaultPermissions('digitadora', 'Digitadora')->id_rol,
+            'tipo_digitadora' => User::TIPO_DIGITADORA_CONFIDENCIAL,
+            'activo' => true,
+        ]);
+
+        $patologia = Patologia::create([
+            'numero_ges' => 221,
+            'nombre' => 'Patología confidencial solo lectura',
+            'descripcion' => 'Prueba de acceso solo visualización',
+            'confidencial' => true,
+            'activo' => true,
+        ]);
+
+        PermisoPatologia::create([
+            'id_usuario' => $user->id_usuario,
+            'id_patologia' => $patologia->id_patologia,
+            'puede_ver' => true,
+            'puede_editar' => false,
+            'puede_asignar' => false,
+        ]);
+
+        $paciente = Paciente::create([
+            'rut' => '55.555.555-5',
+            'nombre' => 'Paciente',
+            'apellido_paterno' => 'Solo Lectura',
+            'apellido_materno' => 'Prueba',
+            'fecha_nacimiento' => '1990-01-01',
+            'sexo' => 'F',
+            'activo' => true,
+        ]);
+
+        $registro = RegistroGes::create([
+            'id_paciente' => $paciente->id_paciente,
+            'id_patologia' => $patologia->id_patologia,
+            'id_prioridad' => Prioridad::create(['nombre' => 'Normal', 'nivel' => 3])->id_prioridad,
+            'id_tipo_registro' => TipoRegistro::create(['nombre' => 'Consulta', 'activo' => true])->id_tipo_registro,
+            'tipo_tratamiento' => 'Control',
+            'fecha_ingreso' => '2026-08-31',
+            'estado' => 'Pendiente',
+        ]);
+
+        $this->actingAs($user, 'sanctum')
+            ->getJson('/api/registros-ges')
+            ->assertOk()
+            ->assertJsonFragment(['id_registro' => $registro->id_registro]);
     }
 
     public function test_user_without_permission_cannot_view_confidential_registros(): void
@@ -172,7 +363,7 @@ class RegistroGesApiTest extends TestCase
 
         $this->actingAs($user, 'sanctum')
             ->getJson('/api/registros-ges/' . $registro->id_registro)
-            ->assertStatus(404);
+            ->assertForbidden();
     }
 
     public function test_catalogos_include_active_patients_without_ges_records(): void
@@ -193,6 +384,48 @@ class RegistroGesApiTest extends TestCase
             ->getJson('/api/registros-ges/catalogos')
             ->assertOk()
             ->assertJsonFragment(['rut' => '17.777.777-7']);
+    }
+
+    public function test_catalogos_only_show_pathologies_user_can_edit(): void
+    {
+        $user = User::create([
+            'nombre' => 'Patologia',
+            'apellido' => 'Restrict',
+            'username' => 'patologia.restrict',
+            'password' => bcrypt('secret123'),
+            'id_rol' => $this->createRoleWithDefaultPermissions('digitadora', 'Digitadora')->id_rol,
+            'activo' => true,
+        ]);
+
+        $autorizada = Patologia::create([
+            'numero_ges' => 205,
+            'nombre' => 'Patología autorizada',
+            'descripcion' => 'Permite crear',
+            'confidencial' => false,
+            'activo' => true,
+        ]);
+
+        $noAutorizada = Patologia::create([
+            'numero_ges' => 206,
+            'nombre' => 'Patología no autorizada',
+            'descripcion' => 'No permite crear',
+            'confidencial' => false,
+            'activo' => true,
+        ]);
+
+        PermisoPatologia::create([
+            'id_usuario' => $user->id_usuario,
+            'id_patologia' => $autorizada->id_patologia,
+            'puede_ver' => true,
+            'puede_editar' => true,
+            'puede_asignar' => false,
+        ]);
+
+        $this->actingAs($user, 'sanctum')
+            ->getJson('/api/registros-ges/catalogos')
+            ->assertOk()
+            ->assertJsonPath('patologias.0.id_patologia', $autorizada->id_patologia)
+            ->assertJsonMissing(['id_patologia' => $noAutorizada->id_patologia]);
     }
 
     public function test_can_delete_registro_with_related_rows(): void
@@ -261,11 +494,43 @@ class RegistroGesApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('message', 'Registro GES eliminado correctamente.');
 
-        $this->assertDatabaseMissing('registros_ges', ['id_registro' => $registro->id_registro]);
-        $this->assertDatabaseMissing('asignaciones', ['id_registro' => $registro->id_registro]);
-        $this->assertDatabaseMissing('hitos', ['id_registro' => $registro->id_registro]);
-        $this->assertDatabaseMissing('historial_registros', ['id_registro' => $registro->id_registro]);
-        $this->assertDatabaseMissing('registros_ges_documentos', ['id_registro' => $registro->id_registro]);
+        $this->assertSoftDeleted('registros_ges', ['id_registro' => $registro->id_registro], null, 'eliminado_en');
+        $this->assertDatabaseHas('asignaciones', ['id_registro' => $registro->id_registro]);
+        $this->assertDatabaseHas('hitos', ['id_registro' => $registro->id_registro]);
+        $this->assertDatabaseHas('historial_registros', ['id_registro' => $registro->id_registro]);
+        $this->assertDatabaseHas('registros_ges_documentos', ['id_registro' => $registro->id_registro]);
+
+        $this->actingAs($user, 'sanctum')
+            ->getJson('/api/registros-ges/' . $registro->id_registro)
+            ->assertNotFound();
+    }
+
+    public function test_supervisor_can_delete_registro_logically(): void
+    {
+        $role = $this->createRoleWithDefaultPermissions('Supervisor');
+        $supervisor = User::create([
+            'nombre' => 'Sup',
+            'apellido' => 'Test',
+            'username' => 'sup.delete',
+            'password' => bcrypt('secret123'),
+            'id_rol' => $role->id_rol,
+            'activo' => true,
+        ]);
+        $paciente = Paciente::create(['rut' => '15.555.555-5', 'nombre' => 'Ana', 'apellido_paterno' => 'Soto', 'activo' => true]);
+        $patologia = Patologia::create(['numero_ges' => 77, 'nombre' => 'Confidencial', 'confidencial' => true, 'activo' => true]);
+        $registro = RegistroGes::create([
+            'id_paciente' => $paciente->id_paciente,
+            'id_patologia' => $patologia->id_patologia,
+            'id_prioridad' => Prioridad::first()->id_prioridad,
+            'id_tipo_registro' => TipoRegistro::first()->id_tipo_registro,
+            'estado' => 'Pendiente',
+        ]);
+
+        $this->actingAs($supervisor, 'sanctum')
+            ->deleteJson('/api/registros-ges/' . $registro->id_registro)
+            ->assertOk();
+
+        $this->assertSoftDeleted('registros_ges', ['id_registro' => $registro->id_registro], null, 'eliminado_en');
     }
 
     private function createUserWithAccess(): User
@@ -274,6 +539,7 @@ class RegistroGesApiTest extends TestCase
             'nombre' => 'digitadora',
             'descripcion' => 'Digitadora',
         ]);
+        $this->grantDefaultRolePermissions($role);
 
         $user = User::create([
             'nombre' => 'Test',
@@ -314,6 +580,7 @@ class RegistroGesApiTest extends TestCase
         Schema::create('usuarios', function ($table): void {
             $table->id('id_usuario');
             $table->unsignedBigInteger('id_rol')->nullable();
+            $table->string('tipo_digitadora')->nullable();
             $table->string('nombre');
             $table->string('apellido');
             $table->string('username')->unique();
@@ -380,7 +647,21 @@ class RegistroGesApiTest extends TestCase
             $table->text('observaciones')->nullable();
             $table->timestamp('fecha_creacion')->nullable();
             $table->timestamp('fecha_actualizacion')->nullable();
+            $table->timestamp('eliminado_en')->nullable();
         });
+
+        if (!Schema::hasTable('registro_ges_patologias')) {
+            Schema::create('registro_ges_patologias', function ($table): void {
+                $table->id('id_registro_patologia');
+                $table->unsignedBigInteger('id_registro');
+                $table->unsignedBigInteger('id_patologia');
+                $table->string('tipo')->default('complicacion');
+                $table->text('observacion')->nullable();
+                $table->timestamp('fecha_creacion')->nullable();
+                $table->timestamp('fecha_actualizacion')->nullable();
+                $table->unique(['id_registro', 'id_patologia']);
+            });
+        }
 
         Schema::create('asignaciones', function ($table): void {
             $table->id('id_asignacion');

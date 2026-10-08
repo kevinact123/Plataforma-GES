@@ -94,7 +94,11 @@
     }
 
     function renderMilestones(milestones) {
-        document.getElementById('milestones').innerHTML = [['pendientes', 'Pendientes', 'warning'], ['completados', 'Completados', 'success']].map(([key, label, color]) => `<div class="col-6"><div class="small text-muted">${label}</div><strong class="display-6 text-${color}">${escapeHtml(milestones[key])}</strong></div>`).join('');
+        document.getElementById('milestones').innerHTML = [
+            ['pendientes', 'Pendientes', 'warning'],
+            ['en_proceso', 'En proceso', 'info'],
+            ['completados', 'Completados', 'success'],
+        ].map(([key, label, color]) => `<div class="col-4"><div class="small text-muted">${label}</div><strong class="display-6 text-${color}">${escapeHtml(milestones[key])}</strong></div>`).join('');
     }
 
     async function loadDashboard() {
