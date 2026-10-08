@@ -298,6 +298,48 @@ class AuthorizationPermissionTest extends TestCase
         );
     }
 
+    public function test_restricted_digitadora_cannot_access_other_pathologies_even_with_explicit_permissions(): void
+    {
+        $role = Rol::create(['nombre' => 'Digitadora', 'descripcion' => 'Digitadora restringida']);
+        $this->grantRolePermission($role, 'ver_registros');
+        $user = User::create([
+            'nombre' => 'Rosa',
+            'apellido' => 'Restringida',
+            'username' => 'rosa.restringida',
+            'password' => bcrypt('secret123'),
+            'id_rol' => $role->id_rol,
+            'tipo_digitadora' => User::TIPO_DIGITADORA_RESTRINGIDO,
+            'activo' => true,
+        ]);
+
+        $restringida = Patologia::create(['numero_ges' => 63, 'nombre' => 'Restringida', 'confidencial' => false, 'activo' => true]);
+        $normal = Patologia::create(['numero_ges' => 92, 'nombre' => 'Normal', 'confidencial' => false, 'activo' => true]);
+        foreach ([$restringida, $normal] as $patologia) {
+            PermisoPatologia::create([
+                'id_usuario' => $user->id_usuario,
+                'id_patologia' => $patologia->id_patologia,
+                'puede_ver' => true,
+                'puede_editar' => true,
+                'puede_asignar' => true,
+            ]);
+        }
+
+        DB::table('registros_ges')->insert([
+            ['id_patologia' => $restringida->id_patologia],
+            ['id_patologia' => $normal->id_patologia],
+        ]);
+
+        $this->assertTrue($user->puedeVerPatologia($restringida));
+        $this->assertTrue($user->puedeEditarPatologia($restringida));
+        $this->assertTrue($user->puedeAsignarPatologia($restringida));
+        $this->assertFalse($user->puedeVerPatologia($normal));
+        $this->assertFalse($user->puedeEditarPatologia($normal));
+        $this->assertFalse($user->puedeAsignarPatologia($normal));
+        $this->assertSame([$restringida->id_patologia], Patologia::query()->visibleTo($user)->pluck('id_patologia')->all());
+        $this->assertSame([$restringida->id_patologia], RegistroGes::query()->visibleTo($user)->pluck('id_patologia')->all());
+        $this->assertSame([], User::query()->withAssignmentAccessTo($normal)->pluck('id_usuario')->all());
+    }
+
     public function test_supervisor_role_permission_allows_global_record_visibility(): void
     {
         $role = Rol::create([

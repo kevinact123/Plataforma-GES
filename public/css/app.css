@@ -68,6 +68,9 @@
 [data-bs-theme="dark"] .border-light { border-color: var(--bs-border-color) !important; }
 [data-bs-theme="dark"] .bg-warning-subtle,
 [data-bs-theme="dark"] .bg-danger-subtle { color: var(--bs-body-color); }
+.badge-restricted { background-color: #fd7e14; color: #212529; }
+.card-restricted { border-color: #fd7e14 !important; background-color: #ffe8d1; color: #212529; }
+[data-bs-theme="dark"] .card-restricted { background-color: #3d2108; color: var(--bs-body-color); }
 [data-bs-theme="dark"] .btn-outline-primary {
     color: #fff;
     border-color: #0d6efd;

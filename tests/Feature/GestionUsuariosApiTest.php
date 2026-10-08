@@ -81,6 +81,30 @@ class GestionUsuariosApiTest extends TestCase
         $this->assertSame([], $data['permisos']);
     }
 
+    public function test_restricted_digitadora_only_keeps_permissions_for_restricted_pathologies(): void
+    {
+        Rol::create(['nombre' => 'digitadora', 'descripcion' => 'Digitadora estándar']);
+        $restringida = Patologia::create(['numero_ges' => 63, 'nombre' => 'Restringida', 'confidencial' => false, 'activo' => true]);
+        $normal = Patologia::create(['numero_ges' => 92, 'nombre' => 'Normal', 'confidencial' => false, 'activo' => true]);
+
+        $data = app(GestionUsuariosService::class)->crearDigitadora([
+            'nombre' => 'Rosa',
+            'apellido' => 'Restringida',
+            'username' => 'rosa.restringida',
+            'correo' => 'rosa.restringida@example.com',
+            'password' => 'secret123',
+            'tipo_digitadora' => User::TIPO_DIGITADORA_RESTRINGIDO,
+            'permisos' => [
+                ['id_patologia' => $restringida->id_patologia, 'puede_ver' => true],
+                ['id_patologia' => $normal->id_patologia, 'puede_ver' => true],
+            ],
+        ]);
+
+        $user = User::findOrFail($data['id_usuario']);
+        $this->assertSame(User::TIPO_DIGITADORA_RESTRINGIDO, $user->tipo_digitadora);
+        $this->assertSame([$restringida->id_patologia], $user->permisosPatologia()->pluck('id_patologia')->all());
+    }
+
     public function test_updating_type_without_permissions_keeps_existing_explicit_pathology_permissions(): void
     {
         $role = Rol::create(['nombre' => 'digitadora', 'descripcion' => 'Digitadora estándar']);

@@ -45,6 +45,7 @@ class GestionUsuariosService
                 'numero_ges' => $patologia->numero_ges,
                 'nombre' => $patologia->nombre,
                 'confidencial' => (bool) $patologia->confidencial,
+                'restringida' => $patologia->esRestringida(),
             ])
             ->all();
     }
@@ -72,6 +73,7 @@ class GestionUsuariosService
                 if ($esDigitadora) {
                     $this->guardarPermisos($user, $data['permisos'] ?? []);
                     $this->depurarPermisosConfidenciales($user);
+                    $this->depurarPermisosRestringidos($user);
                 }
 
                 return $this->serializeDigitadora($user->fresh(['permisosPatologia.patologia']));
@@ -138,7 +140,9 @@ class GestionUsuariosService
                 $this->guardarPermisos($user, $data['permisos'] ?? []);
             }
 
-            $this->depurarPermisosConfidenciales($user->fresh());
+            $user = $user->fresh();
+            $this->depurarPermisosConfidenciales($user);
+            $this->depurarPermisosRestringidos($user);
 
             return $this->serializeDigitadora($user->fresh(['permisosPatologia.patologia']));
         });
@@ -195,6 +199,15 @@ class GestionUsuariosService
         $user->permisosPatologia()
             ->whereIn('id_patologia', Patologia::query()->where('confidencial', true)->select('id_patologia'))
             ->delete();
+    }
+
+    private function depurarPermisosRestringidos(User $user): void
+    {
+        if ($user->esDigitadoraRestringida()) {
+            $user->permisosPatologia()
+                ->whereNotIn('id_patologia', Patologia::query()->restringidas()->select('id_patologia'))
+                ->delete();
+        }
     }
 
     private function guardarPermisos(User $user, array $permisos): void

@@ -21,10 +21,7 @@ class UpdateDigitadoraRequest extends FormRequest
             'username' => ['sometimes', 'required', 'string', 'max:100', 'alpha_dash', Rule::unique('usuarios', 'username')->ignore($this->route('usuario'), 'id_usuario')],
             'password' => ['sometimes', 'nullable', 'string', 'min:8', 'max:72', 'confirmed'],
             'correo' => ['sometimes', 'required', 'string', 'email', 'max:255', Rule::unique('usuarios', 'correo')->ignore($this->route('usuario'), 'id_usuario')],
-            'tipo_digitadora' => ['sometimes', 'required', Rule::in([
-                User::TIPO_DIGITADORA_NO_CONFIDENCIAL,
-                User::TIPO_DIGITADORA_CONFIDENCIAL,
-            ])],
+            'tipo_digitadora' => ['sometimes', 'required', Rule::in(User::TIPOS_DIGITADORA)],
             'permisos' => ['nullable', 'array'],
             'permisos.*.id_patologia' => ['required', 'integer', 'exists:patologias,id_patologia'],
             'permisos.*.puede_ver' => ['sometimes', 'boolean'],

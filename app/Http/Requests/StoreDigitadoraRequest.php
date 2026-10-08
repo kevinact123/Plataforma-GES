@@ -24,10 +24,7 @@ class StoreDigitadoraRequest extends FormRequest
             'username' => ['required', 'string', 'max:100', 'alpha_dash', Rule::unique('usuarios', 'username')],
             'correo' => ['required', 'string', 'email', 'max:255', Rule::unique('usuarios', 'correo')],
             'password' => ['required', 'string', 'min:8', 'max:72', 'confirmed'],
-            'tipo_digitadora' => ['sometimes', 'nullable', Rule::in([
-                User::TIPO_DIGITADORA_NO_CONFIDENCIAL,
-                User::TIPO_DIGITADORA_CONFIDENCIAL,
-            ])],
+            'tipo_digitadora' => ['sometimes', 'nullable', Rule::in(User::TIPOS_DIGITADORA)],
             'permisos' => ['nullable', 'array'],
             'permisos.*.id_patologia' => ['required', 'integer', 'exists:patologias,id_patologia'],
             'permisos.*.puede_ver' => ['sometimes', 'boolean'],
@@ -47,7 +44,7 @@ class StoreDigitadoraRequest extends FormRequest
             $tipo = $this->input('tipo_digitadora');
 
             if ($esDigitadora && $tipo === null && $this->has('tipo_digitadora')) {
-                $validator->errors()->add('tipo_digitadora', 'Debes indicar si la digitadora es NO_CONFIDENCIAL o CONFIDENCIAL.');
+                $validator->errors()->add('tipo_digitadora', 'Debes indicar el tipo de digitadora.');
             }
 
             if (! $esDigitadora && $tipo !== null) {

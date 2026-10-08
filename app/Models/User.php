@@ -29,9 +29,12 @@ class User extends Authenticatable
 
     public const TIPO_DIGITADORA_CONFIDENCIAL = 'CONFIDENCIAL';
 
+    public const TIPO_DIGITADORA_RESTRINGIDO = 'RESTRINGIDO';
+
     public const TIPOS_DIGITADORA = [
         self::TIPO_DIGITADORA_NO_CONFIDENCIAL,
         self::TIPO_DIGITADORA_CONFIDENCIAL,
+        self::TIPO_DIGITADORA_RESTRINGIDO,
     ];
 
     protected static function booted(): void
@@ -57,7 +60,7 @@ class User extends Authenticatable
             $user->tipo_digitadora ??= self::TIPO_DIGITADORA_NO_CONFIDENCIAL;
 
             if (! in_array($user->tipo_digitadora, self::TIPOS_DIGITADORA, true)) {
-                throw new \InvalidArgumentException('tipo_digitadora debe ser NO_CONFIDENCIAL o CONFIDENCIAL.');
+                throw new \InvalidArgumentException('tipo_digitadora no es válido.');
             }
         });
     }
@@ -253,7 +256,14 @@ class User extends Authenticatable
 
     public function puedeAccederAPatologia(Patologia $patologia): bool
     {
-        return ! $patologia->confidencial || $this->puedeAccederAConfidenciales();
+        return (! $this->esDigitadoraRestringida() || $patologia->esRestringida())
+            && (! $patologia->confidencial || $this->puedeAccederAConfidenciales());
+    }
+
+    public function esDigitadoraRestringida(): bool
+    {
+        return $this->hasRole('digitadora')
+            && $this->tipo_digitadora === self::TIPO_DIGITADORA_RESTRINGIDO;
     }
 
     public function scopeWithAssignmentAccessTo(Builder $query, Patologia $patologia): Builder
@@ -267,7 +277,11 @@ class User extends Authenticatable
                 $accessQuery->orWhere('tipo_digitadora', self::TIPO_DIGITADORA_CONFIDENCIAL);
             }
         })->when($patologia->confidencial, fn (Builder $confidentialQuery) => $confidentialQuery
-            ->where('tipo_digitadora', self::TIPO_DIGITADORA_CONFIDENCIAL));
+            ->where('tipo_digitadora', self::TIPO_DIGITADORA_CONFIDENCIAL))
+            ->when(! $patologia->esRestringida(), fn (Builder $query) => $query->where(function (Builder $typeQuery): void {
+                $typeQuery->whereNull('tipo_digitadora')
+                    ->orWhere('tipo_digitadora', '!=', self::TIPO_DIGITADORA_RESTRINGIDO);
+            }));
     }
 
     private function tienePermisoPatologia(Patologia $patologia, string $permiso): bool

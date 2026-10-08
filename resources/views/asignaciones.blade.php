@@ -115,8 +115,9 @@
                 <label class="form-label d-block">Tipo de digitador/a</label>
                 <div class="form-check"><input class="form-check-input" type="checkbox" id="tipo-dig-no" name="tipo_no" checked><label class="form-check-label" for="tipo-dig-no">No confidencial</label></div>
 <div class="form-check"><input class="form-check-input" type="checkbox" id="tipo-dig-si" name="tipo_si"><label class="form-check-label" for="tipo-dig-si">Confidencial</label></div>
+                <div class="form-check"><input class="form-check-input" type="checkbox" id="tipo-dig-restringido" name="tipo_restringido"><label class="form-check-label" for="tipo-dig-restringido">Restringido</label></div>
             </div>
-            <div class="col-12 small text-muted" id="tipo-digitadora-help">Solo No confidencial: accede únicamente a las patologías no confidenciales. Confidencial (sola o junto con No confidencial): accede a las patologías confidenciales (VIH/SIDA, Agresión Sexual Aguda) además de las no confidenciales, y recibe Ver, Editar y Asignar sobre las confidenciales. El/la digitador/a solo No confidencial nunca accede a las confidenciales, aunque se le marquen permisos.</div>
+            <div class="col-12 small text-muted" id="tipo-digitadora-help">No confidencial y Confidencial mantienen sus accesos actuales. Restringido solo puede acceder a patologías marcadas como Restringido, aunque tenga otros permisos seleccionados.</div>
             <div class="col-12" id="pathology-permissions-group">
                 <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
                     <h3 class="h6 mb-0">Permisos por patología</h3>
@@ -205,8 +206,9 @@
                         <label class="form-label d-block">Tipo de digitador/a</label>
                         <div class="form-check"><input class="form-check-input" type="checkbox" id="edit-tipo-dig-no" name="tipo_no" checked><label class="form-check-label" for="edit-tipo-dig-no">No confidencial</label></div>
 <div class="form-check"><input class="form-check-input" type="checkbox" id="edit-tipo-dig-si" name="tipo_si"><label class="form-check-label" for="edit-tipo-dig-si">Confidencial</label></div>
+                        <div class="form-check"><input class="form-check-input" type="checkbox" id="edit-tipo-dig-restringido" name="tipo_restringido"><label class="form-check-label" for="edit-tipo-dig-restringido">Restringido</label></div>
                     </div>
-                    <div class="col-12 small text-muted">Solo el/la digitador/a CONFIDENCIAL puede acceder a las patologías confidenciales. Si cambias a NO_CONFIDENCIAL, se eliminan sus permisos sobre ellas.</div>
+                    <div class="col-12 small text-muted">Restringido solo puede acceder a patologías marcadas como Restringido; al guardar se eliminan sus permisos sobre las demás.</div>
                     <div class="col-12">
                         <div id="digitadora-permissions-container" class="row g-2"></div>
                     </div>
@@ -458,6 +460,16 @@
         }
     });
 
+    function pathologyStyle(pathology) {
+        if (pathology.confidencial) {
+            return { badge: '<span class="badge text-bg-danger">Confidencial</span>', cardClass: 'border-danger bg-danger-subtle' };
+        }
+        if (pathology.restringida) {
+            return { badge: '<span class="badge badge-restricted">Restringido</span>', cardClass: 'card-restricted' };
+        }
+        return { badge: '<span class="badge text-bg-light border">Normal</span>', cardClass: 'border-light bg-white' };
+    }
+
     function renderPathologies(pathologies) {
         allPathologies = pathologies;
         const searchTerm = (document.getElementById('pathology-search')?.value || '').trim().toLowerCase();
@@ -468,11 +480,10 @@
                 <div class="border rounded bg-light p-2 pathology-permissions-scroll">
                     <div class="row g-2">
                         ${filteredPathologies.map((pathology) => {
-                            const isConfidencial = Boolean(pathology.confidencial);
-                            const confidentialBadge = isConfidencial ? '<span class="badge text-bg-danger">Confidencial</span>' : '<span class="badge text-bg-light border">Normal</span>';
+                            const { badge: confidentialBadge, cardClass } = pathologyStyle(pathology);
                             return `
                                 <div class="col-xl-6">
-                                    <div class="border rounded p-2 ${isConfidencial ? 'border-danger bg-danger-subtle' : 'border-light bg-white'} pathology-permission-card">
+                                    <div class="border rounded p-2 ${cardClass} pathology-permission-card">
                                         <div class="d-flex justify-content-between align-items-center gap-2">
                                             <strong class="small me-2">${escapeHtml(pathology.numero_ges)} - ${escapeHtml(pathology.nombre)}</strong>
                                             ${confidentialBadge}
@@ -491,12 +502,13 @@
     }
 
     function renderDigitadoras(users) {
+        const tiposDigitadora = { NO_CONFIDENCIAL: 'No confidencial', CONFIDENCIAL: 'Confidencial', RESTRINGIDO: 'Restringido' };
         digitadorasList.innerHTML = users.length ? users.map((user) => {
             const active = Boolean(user.activo);
             const blocked = Boolean(user.bloqueado);
             const isDigitadora = user.rol?.toLowerCase() === 'digitadora';
             const tipo = isDigitadora
-                ? (user.tipo_digitadora === 'CONFIDENCIAL' ? 'Digitadora · Confidencial' : 'Digitadora · No confidencial')
+                ? `Digitadora · ${tiposDigitadora[user.tipo_digitadora] || 'No confidencial'}`
                 : user.rol;
             const actions = isDigitadora
                 ? `<button class="btn btn-sm btn-outline-primary me-1" type="button" data-digitadora-edit="${user.id_usuario}">Editar</button><button class="btn btn-sm btn-outline-${blocked ? 'warning' : (active ? 'danger' : 'success')}" type="button" data-digitadora-state="${user.id_usuario}" data-active="${active}" ${blocked ? 'title="Cuenta bloqueada: clic para reactivar"' : ''}>${blocked ? '<i class="bi bi-lock-fill me-1"></i>Bloqueada' : (active ? 'Desactivar' : 'Reactivar')}</button><button class="btn btn-sm btn-outline-danger ms-1" type="button" data-digitadora-delete="${user.id_usuario}">Eliminar</button>`
@@ -508,7 +520,8 @@
     function renderDigitadoraPermissions(user, pathologies) {
         const permissionsMap = new Map((user.permisos || []).map((permiso) => [permiso.id_patologia, permiso]));
         document.getElementById('edit-tipo-dig-si').checked = user.tipo_digitadora === 'CONFIDENCIAL';
-        document.getElementById('edit-tipo-dig-no').checked = user.tipo_digitadora !== 'CONFIDENCIAL';
+        document.getElementById('edit-tipo-dig-restringido').checked = user.tipo_digitadora === 'RESTRINGIDO';
+        document.getElementById('edit-tipo-dig-no').checked = !['CONFIDENCIAL', 'RESTRINGIDO'].includes(user.tipo_digitadora);
         document.getElementById('digitadora-permissions-title').textContent = `Editar a ${user.nombre}`;
         document.getElementById('edit-nombre').value = user.nombre_pila ?? '';
         document.getElementById('edit-apellido').value = user.apellido ?? '';
@@ -519,9 +532,8 @@
         document.getElementById('digitadora-permissions-container').innerHTML = pathologies.map((pathology) => {
             const permiso = permissionsMap.get(pathology.id_patologia) || {};
             const selected = Boolean(permiso.puede_ver || permiso.puede_editar || permiso.puede_asignar);
-            const isConfidencial = Boolean(pathology.confidencial);
-            const confidentialBadge = isConfidencial ? '<span class="badge text-bg-danger">Confidencial</span>' : '<span class="badge text-bg-light border">Normal</span>';
-            return `<div class="col-lg-6"><div class="border rounded p-3 ${isConfidencial ? 'border-danger bg-danger-subtle' : 'border-light'}"><div class="d-flex justify-content-between align-items-center gap-2"><strong>${escapeHtml(pathology.numero_ges)} - ${escapeHtml(pathology.nombre)}</strong>${confidentialBadge}</div><div class="mt-2 d-flex gap-3 flex-wrap"><label><input type="checkbox" name="permisos[${pathology.id_patologia}]" ${selected ? 'checked' : ''}> Seleccionar</label></div></div></div>`;
+            const { badge: confidentialBadge, cardClass } = pathologyStyle(pathology);
+            return `<div class="col-lg-6"><div class="border rounded p-3 ${cardClass}"><div class="d-flex justify-content-between align-items-center gap-2"><strong>${escapeHtml(pathology.numero_ges)} - ${escapeHtml(pathology.nombre)}</strong>${confidentialBadge}</div><div class="mt-2 d-flex gap-3 flex-wrap"><label><input type="checkbox" name="permisos[${pathology.id_patologia}]" ${selected ? 'checked' : ''}> Seleccionar</label></div></div></div>`;
         }).join('');
         document.getElementById('digitadora-permissions-form').dataset.userId = user.id_usuario;
     }
@@ -550,28 +562,56 @@
         event.target.checked ? selectedPathologies.add(id) : selectedPathologies.delete(id);
     });
 
-    function applyTipoToPathologies(tipoCheckbox, confidencial, selectFn) {
-        allPathologies.filter((pathology) => Boolean(pathology.confidencial) === confidencial)
+    function applyTipoToPathologies(tipoCheckbox, matchesPathology, selectFn) {
+        allPathologies.filter(matchesPathology)
             .forEach((pathology) => selectFn(Number(pathology.id_patologia), tipoCheckbox.checked));
     }
 
+    function selectDigitadoraType(idPrefix, selectedId) {
+        if (!document.getElementById(selectedId).checked) return;
+        [`${idPrefix}-no`, `${idPrefix}-si`, `${idPrefix}-restringido`]
+            .filter((id) => id !== selectedId)
+            .forEach((id) => { document.getElementById(id).checked = false; });
+    }
+
     document.getElementById('tipo-dig-no').addEventListener('change', (event) => {
-        applyTipoToPathologies(event.target, false, (id, on) => on ? selectedPathologies.add(id) : selectedPathologies.delete(id));
+        selectDigitadoraType('tipo-dig', 'tipo-dig-no');
+        applyTipoToPathologies(event.target, (pathology) => !Boolean(pathology.confidencial), (id, on) => on ? selectedPathologies.add(id) : selectedPathologies.delete(id));
         renderPathologies(allPathologies);
     });
     document.getElementById('tipo-dig-si').addEventListener('change', (event) => {
-        applyTipoToPathologies(event.target, true, (id, on) => on ? selectedPathologies.add(id) : selectedPathologies.delete(id));
+        selectDigitadoraType('tipo-dig', 'tipo-dig-si');
+        applyTipoToPathologies(event.target, (pathology) => Boolean(pathology.confidencial), (id, on) => on ? selectedPathologies.add(id) : selectedPathologies.delete(id));
+        renderPathologies(allPathologies);
+    });
+    document.getElementById('tipo-dig-restringido').addEventListener('change', (event) => {
+        selectDigitadoraType('tipo-dig', 'tipo-dig-restringido');
+        if (event.target.checked) selectedPathologies.clear();
+        applyTipoToPathologies(event.target, (pathology) => pathology.restringida, (id, on) => on ? selectedPathologies.add(id) : selectedPathologies.delete(id));
         renderPathologies(allPathologies);
     });
 
-    document.getElementById('edit-tipo-dig-no').addEventListener('change', (event) => setEditSelection(false, event.target.checked));
-    document.getElementById('edit-tipo-dig-si').addEventListener('change', (event) => setEditSelection(true, event.target.checked));
+    document.getElementById('edit-tipo-dig-no').addEventListener('change', (event) => {
+        selectDigitadoraType('edit-tipo-dig', 'edit-tipo-dig-no');
+        setEditSelection((pathology) => !Boolean(pathology.confidencial), event.target.checked);
+    });
+    document.getElementById('edit-tipo-dig-si').addEventListener('change', (event) => {
+        selectDigitadoraType('edit-tipo-dig', 'edit-tipo-dig-si');
+        setEditSelection((pathology) => Boolean(pathology.confidencial), event.target.checked);
+    });
+    document.getElementById('edit-tipo-dig-restringido').addEventListener('change', (event) => {
+        selectDigitadoraType('edit-tipo-dig', 'edit-tipo-dig-restringido');
+        if (event.target.checked) {
+            document.querySelectorAll('#digitadora-permissions-container input[type="checkbox"]').forEach((input) => { input.checked = false; });
+        }
+        setEditSelection((pathology) => pathology.restringida, event.target.checked);
+    });
 
-    function setEditSelection(confidencial, checked) {
-        const confidentialIds = new Set(allPathologies.filter((pathology) => Boolean(pathology.confidencial) === confidencial).map((pathology) => String(pathology.id_patologia)));
+    function setEditSelection(matchesPathology, checked) {
+        const pathologyIds = new Set(allPathologies.filter(matchesPathology).map((pathology) => String(pathology.id_patologia)));
         document.querySelectorAll('#digitadora-permissions-container input[type="checkbox"]').forEach((input) => {
             const id = input.name.match(/^permisos\[(\d+)\]$/)?.[1];
-            if (id && confidentialIds.has(id)) input.checked = checked;
+            if (id && pathologyIds.has(id)) input.checked = checked;
         });
     }
 
@@ -583,7 +623,7 @@
             renderRoles(data.roles || []);
             if (!defaultSelectionApplied) {
                 allPathologies = data.patologias;
-                ['tipo-dig-no', 'tipo-dig-si'].forEach((id, index) => applyTipoToPathologies(document.getElementById(id), index === 1, (pid, on) => on && selectedPathologies.add(pid)));
+                applyTipoToPathologies(document.getElementById('tipo-dig-no'), (pathology) => !Boolean(pathology.confidencial), (pid, on) => on && selectedPathologies.add(pid));
                 defaultSelectionApplied = true;
             }
             renderPathologies(data.patologias);
@@ -630,8 +670,8 @@
         event.preventDefault();
         const form = new FormData(event.target);
         const isDigitadora = form.get('id_rol') === digitadoraRoleId;
-        if (isDigitadora && !form.get('tipo_si') && !form.get('tipo_no')) { showMessage('Selecciona al menos un tipo de digitador/a.', 'danger'); return; }
-        const tipoDigitadora = isDigitadora ? (form.get('tipo_si') ? 'CONFIDENCIAL' : 'NO_CONFIDENCIAL') : null;
+        if (isDigitadora && !form.get('tipo_si') && !form.get('tipo_no') && !form.get('tipo_restringido')) { showMessage('Selecciona un tipo de digitador/a.', 'danger'); return; }
+        const tipoDigitadora = isDigitadora ? (form.get('tipo_restringido') ? 'RESTRINGIDO' : (form.get('tipo_si') ? 'CONFIDENCIAL' : 'NO_CONFIDENCIAL')) : null;
         const permissions = [...selectedPathologies].map((id) => {
             return { id_patologia: id, puede_ver: true, puede_editar: true, puede_asignar: true };
         }).filter((permission) => isDigitadora && (permission.puede_ver || permission.puede_editar || permission.puede_asignar));
@@ -707,10 +747,10 @@
 
         const filteredPermissions = Object.values(permissions).filter((permission) => permission.puede_ver || permission.puede_editar || permission.puede_asignar);
 
-        if (!form.querySelector('[name="tipo_si"]').checked && !form.querySelector('[name="tipo_no"]').checked) { showMessage('Selecciona al menos un tipo de digitador/a.', 'danger'); return; }
+        if (!form.querySelector('[name="tipo_si"]').checked && !form.querySelector('[name="tipo_no"]').checked && !form.querySelector('[name="tipo_restringido"]').checked) { showMessage('Selecciona un tipo de digitador/a.', 'danger'); return; }
 
         try {
-            const tipoDigitadora = form.querySelector('[name="tipo_si"]').checked ? 'CONFIDENCIAL' : 'NO_CONFIDENCIAL';
+            const tipoDigitadora = form.querySelector('[name="tipo_restringido"]').checked ? 'RESTRINGIDO' : (form.querySelector('[name="tipo_si"]').checked ? 'CONFIDENCIAL' : 'NO_CONFIDENCIAL');
             await apiRequest(`{{ url('/api/admin/digitadoras') }}/${userId}`, {
                 method: 'PUT',
                 body: JSON.stringify({ nombre: form.querySelector('[name="nombre"]').value, apellido: form.querySelector('[name="apellido"]').value, username: form.querySelector('[name="username"]').value, correo: form.querySelector('[name="correo"]').value, password: form.querySelector('[name="password"]').value || null, password_confirmation: form.querySelector('[name="password_confirmation"]').value || null, tipo_digitadora: tipoDigitadora, permisos: filteredPermissions })

@@ -10,6 +10,8 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Patologia extends Model
 {
+    public const NUMEROS_GES_RESTRINGIDOS = [1, 3, 8, 9, 14, 16, 17, 28, 30, 33, 35, 36, 43, 45, 51, 63, 64, 67, 68, 69, 71, 72, 73, 78, 83, 84, 85];
+
     protected $table = 'patologias';
 
     protected $primaryKey = 'id_patologia';
@@ -55,7 +57,18 @@ class Patologia extends Model
                 $pathologyQuery->orWhere('confidencial', true);
             }
         })->when(! $user->puedeAccederAConfidenciales(), fn (Builder $publicQuery) => $publicQuery
-            ->where('confidencial', false));
+            ->where('confidencial', false))
+            ->when($user->esDigitadoraRestringida(), fn (Builder $restrictedQuery) => $restrictedQuery->restringidas());
+    }
+
+    public function scopeRestringidas(Builder $query): Builder
+    {
+        return $query->whereIn('numero_ges', self::NUMEROS_GES_RESTRINGIDOS);
+    }
+
+    public function esRestringida(): bool
+    {
+        return in_array((int) $this->numero_ges, self::NUMEROS_GES_RESTRINGIDOS, true);
     }
 
     public function registrosGes(): HasMany

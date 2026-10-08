@@ -70,8 +70,8 @@ Si encuentra roles desconocidos o usuarios que apuntan a roles inexistentes,
 se detiene sin normalizar los datos.
 
 El rol se almacena en `usuarios.id_rol`. El tipo de digitadora es independiente
-(`usuarios.tipo_digitadora`) y admite `NO_CONFIDENCIAL` o `CONFIDENCIAL`; solo
-aplica a Digitadora y es `NULL` para Administrador y Supervisor. No existen
+(`usuarios.tipo_digitadora`) y admite `NO_CONFIDENCIAL`, `CONFIDENCIAL` o
+`RESTRINGIDO`; solo aplica a Digitadora y es `NULL` para Administrador y Supervisor. No existen
 roles separados como «Digitadora Confidencial».
 
 Los permisos de acción se almacenan en `permisos` y se asocian a roles mediante
@@ -93,6 +93,11 @@ Una Digitadora `NO_CONFIDENCIAL` no puede verlas, buscarlas, recibir
 asignaciones ni editarlas, aunque tenga permisos explícitos por patología.
 Cambiar una digitadora a `NO_CONFIDENCIAL` elimina sus permisos sobre patologías
 confidenciales.
+
+Una Digitadora `RESTRINGIDO` solo puede ver, editar y asignar patologías
+marcadas como restringidas; esta limitación prevalece sobre los permisos
+explícitos y se aplica también a los registros y asignaciones. Las patologías
+restringidas son las definidas por `Patologia::NUMEROS_GES_RESTRINGIDOS`.
 
 La confidencialidad se cambia con
 `PUT /api/patologias/{id}/confidencialidad`, enviando
