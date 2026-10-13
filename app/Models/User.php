@@ -31,10 +31,13 @@ class User extends Authenticatable
 
     public const TIPO_DIGITADORA_RESTRINGIDO = 'RESTRINGIDO';
 
+    public const TIPO_DIGITADORA_NO_CONFIDENCIAL_RESTRINGIDO = 'NO_CONF_RESTRINGIDO';
+
     public const TIPOS_DIGITADORA = [
         self::TIPO_DIGITADORA_NO_CONFIDENCIAL,
         self::TIPO_DIGITADORA_CONFIDENCIAL,
         self::TIPO_DIGITADORA_RESTRINGIDO,
+        self::TIPO_DIGITADORA_NO_CONFIDENCIAL_RESTRINGIDO,
     ];
 
     protected static function booted(): void

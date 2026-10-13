@@ -19,6 +19,8 @@ class StorePacienteRequest extends FormRequest
             'apellido_paterno' => ['required', 'string', 'max:100'],
             'apellido_materno' => ['nullable', 'string', 'max:100'],
             'hora_cierre_dau' => ['nullable', 'date'],
+            'hora_llegada' => ['nullable', 'date'],
+            'hora_atencion' => ['nullable', 'date'],
             'sexo' => ['nullable', 'string', 'max:10'],
         ];
     }

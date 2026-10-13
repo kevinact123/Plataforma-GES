@@ -150,6 +150,32 @@ class DocumentoAnalisisApiTest extends TestCase
             ->assertJsonPath('data.datos_ignorados', []);
     }
 
+    public function test_maps_admission_and_clinical_attention_hour_headers(): void
+    {
+        Storage::fake('local');
+        $role = $this->createRoleWithDefaultPermissions('digitadora', 'Digitadora');
+        $user = User::create([
+            'nombre' => 'Validadora',
+            'apellido' => 'Horas',
+            'username' => 'validadora.horas',
+            'password' => bcrypt('secret123'),
+            'id_rol' => $role->id_rol,
+            'activo' => true,
+        ]);
+
+        $headers = 'RUT,Nombre,HORA ADMISION,HORA ATENCION PROFESIONAL,HORA ATENCION MEDICA,HORA CIERRE DAU';
+        $values = '11.111.111-1,Ana,13-10-2026 07:45,13-10-2026 08:10,13-10-2026 08:25,13-10-2026 09:00';
+        $response = $this->actingAs($user, 'sanctum')->postJson('/api/documentacion/analizar', [
+            'documento' => UploadedFile::fake()->createWithContent('horas.csv', $headers."\n".$values),
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('data.puede_importar', true)
+            ->assertJsonPath('data.datos.hora_llegada', '2026-10-13 07:45:00')
+            ->assertJsonPath('data.datos.hora_atencion', '2026-10-13 08:25:00')
+            ->assertJsonPath('data.datos.hora_cierre_dau', '2026-10-13 09:00:00');
+    }
+
     public function test_warns_about_same_file_but_scans_it_again(): void
     {
         Storage::fake('local');

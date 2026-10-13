@@ -220,8 +220,46 @@
             const autoError = !response.data.importado && response.data.resultado_importacion?.error;
             showDocumentacionMessage(response.message, response.data.importado ? 'success' : (autoError ? 'danger' : 'info'));
             await loadDocumentos();
+            await checkDetectedPatient(response.data.id_documento);
         } catch (error) { showDocumentacionMessage(error.message, 'danger'); } finally { button.disabled = false; }
     });
+    async function checkDetectedPatient(documentId) {
+        let box = document.getElementById('detected-patient-box');
+        if (!box) {
+            box = document.createElement('div');
+            box.id = 'detected-patient-box';
+            documentacionMessage.after(box);
+        }
+        box.innerHTML = '';
+        let result;
+        try {
+            result = (await documentacionFetch(`{{ url('/api/documentacion') }}/${documentId}/detectar-paciente`, { method: 'POST' }))?.data;
+        } catch (error) { return; }
+        if (!result) return;
+        if (result.status === 'registrado') {
+            box.innerHTML = `<div class="alert alert-info">${escapeDocumentacion(result.message)} <strong>${escapeDocumentacion(result.nombre)}</strong> (${escapeDocumentacion(result.rut)}). El documento fue vinculado a su ficha.</div>`;
+            await loadDocumentos();
+        } else if (result.status === 'no_registrado') {
+            box.innerHTML = `<div class="alert alert-warning"><strong>${escapeDocumentacion(result.message)}</strong><br>Datos capturados del documento. ¿Desea agregarlo?
+                <div class="row g-2 mt-1"><div class="col-md-6"><input id="detected-patient-name" class="form-control" placeholder="Nombre completo" value="${escapeDocumentacion(result.nombre || '').replace(/"/g, '&quot;')}"></div>
+                <div class="col-md-3"><input id="detected-patient-rut" class="form-control" value="${escapeDocumentacion(result.rut).replace(/"/g, '&quot;')}"></div>
+                <div class="col-md-3 text-nowrap"><button type="button" class="btn btn-success me-1" id="detected-patient-add">Sí, agregar</button><button type="button" class="btn btn-outline-secondary" id="detected-patient-cancel">No</button></div></div></div>`;
+            document.getElementById('detected-patient-cancel').addEventListener('click', () => { box.innerHTML = ''; });
+            document.getElementById('detected-patient-add').addEventListener('click', async event => {
+                event.currentTarget.disabled = true;
+                try {
+                    const added = await documentacionFetch(`{{ url('/api/documentacion') }}/${documentId}/agregar-paciente`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ rut: document.getElementById('detected-patient-rut').value, nombre: document.getElementById('detected-patient-name').value }) });
+                    box.innerHTML = `<div class="alert alert-success">${escapeDocumentacion(added.message)}</div>`;
+                    await Promise.all([loadCatalogos(), loadDocumentos()]);
+                } catch (error) {
+                    event.currentTarget.disabled = false;
+                    box.insertAdjacentHTML('beforeend', `<div class="alert alert-danger mt-2">${escapeDocumentacion(error.message)}</div>`);
+                }
+            });
+        } else {
+            box.innerHTML = `<div class="alert alert-secondary">${escapeDocumentacion(result.message)}</div>`;
+        }
+    }
     document.getElementById('import-documento').addEventListener('click', async event => {
         if (!ingestionDocumentId) return;
         const importButton = event.currentTarget;
@@ -281,6 +319,33 @@
     document.getElementById('editar-documento-form').addEventListener('submit', async event => {
         event.preventDefault(); const formData = new FormData(event.target); formData.append('_method', 'PUT');
         try { await documentacionFetch(`{{ url('/api/documentacion') }}/${document.getElementById('editar-id').value}`, {method: 'POST', body: formData}); editDialog.close(); await loadDocumentos(); showDocumentacionMessage('Documento actualizado correctamente.'); } catch (error) { showDocumentacionMessage(error.message, 'danger'); }
+    });
+    ['id_paciente', 'filtro-paciente', 'editar-paciente'].forEach(id => {
+        const select = document.getElementById(id);
+        if (!select) return;
+        const normalize = value => (value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+        const matchesTerm = (text, term) => {
+            const clean = normalize(text);
+            if (clean.includes(term)) return true;
+            const rutTerm = term.replace(/[.\-\s]/g, '');
+            return /\d/.test(rutTerm) && clean.replace(/[.\-\s]/g, '').includes(rutTerm);
+        };
+        const search = document.createElement('input');
+        search.type = 'search';
+        search.className = 'form-control form-control-sm mb-1';
+        search.placeholder = 'Buscar por nombre o RUT...';
+        select.before(search);
+        search.addEventListener('input', () => {
+            const term = normalize(search.value);
+            if (!search.snapshot) search.snapshot = Array.from(select.options).map(option => ({ value: option.value, text: option.textContent }));
+            const current = select.value;
+            const matches = search.snapshot.filter(item => item.value === '' || term === '' || matchesTerm(item.text, term));
+            select.innerHTML = matches.map(item => `<option value="${escapeDocumentacion(item.value)}">${escapeDocumentacion(item.text)}</option>`).join('');
+            if (matches.some(item => item.value === current)) select.value = current;
+            if (term === '') { search.snapshot = null; select.size = 1; return; }
+            select.size = Math.min(8, matches.length) || 1;
+        });
+        select.addEventListener('change', () => { select.size = 1; search.snapshot = null; search.value = ''; });
     });
     (async () => { try { await loadCatalogos(); await loadDocumentos(); } catch (error) { showDocumentacionMessage(error.message, 'danger'); } })();
 </script>

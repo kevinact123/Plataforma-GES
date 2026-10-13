@@ -75,6 +75,15 @@ class PacienteController extends Controller
                 });
             }
         }
+        if (in_array($request->query('con_registros'), ['si', 'no'], true)) {
+            $conRegistros = $request->query('con_registros') === 'si';
+            $query->where(function ($activityQuery) use ($user, $conRegistros): void {
+                $method = $conRegistros ? 'whereHas' : 'whereDoesntHave';
+                $activityQuery->{$method}('registrosGes', fn ($registroQuery) => $registroQuery->visibleTo($user));
+                $docMethod = $conRegistros ? 'orWhereHas' : 'whereDoesntHave';
+                $activityQuery->{$docMethod}('documentosGenerales');
+            });
+        }
         $pacientes = $query->orderBy('apellido_paterno')->paginate($request->integer('per_page', 15));
 
         return PacienteResource::collection($pacientes);

@@ -136,13 +136,19 @@
                 dashboardFetch('{{ url('/api/dashboard/hitos') }}'),
                 dashboardFetch('{{ url('/api/dashboard/complejidad-promedio') }}' + monthQuery),
             ]);
-            if (!summary) return;
-            renderSummary(summary);
+            if (!summary || !milestones) return;
+            const dashboardSummary = {
+                ...summary,
+                registros_pendientes: milestones.pendientes,
+                registros_en_proceso: milestones.en_proceso,
+                registros_completados: milestones.completados,
+            };
+            renderSummary(dashboardSummary);
             renderTables(load?.data || [], records?.data || []);
-            renderMilestones(milestones || {});
+            renderMilestones(milestones);
             document.getElementById('complexity-value').textContent = complexity?.promedio ?? '0.0';
             const palette = ['#176b87', '#d99a2b', '#5a9367', '#b64b4b', '#6c757d', '#9b6b9e'];
-            drawChart('status-chart', 'doughnut', ['Pendientes', 'En proceso', 'Completados', 'Sin asignar'], [summary.registros_pendientes, summary.registros_en_proceso, summary.registros_completados, summary.registros_sin_asignar], palette);
+            drawChart('status-chart', 'doughnut', ['Pendientes', 'En proceso', 'Completados', 'Sin asignar'], [dashboardSummary.registros_pendientes, dashboardSummary.registros_en_proceso, dashboardSummary.registros_completados, summary.registros_sin_asignar], palette);
             drawChart('priority-chart', 'bar', (distributions?.prioridades || []).map((item) => item.label), (distributions?.prioridades || []).map((item) => item.total), palette);
             drawChart('type-chart', 'doughnut', (distributions?.tipos_registro || []).map((item) => item.label), (distributions?.tipos_registro || []).map((item) => item.total), palette);
             drawChart('pathology-chart', 'bar', (distributions?.patologias || []).map((item) => item.label), (distributions?.patologias || []).map((item) => item.total), palette);

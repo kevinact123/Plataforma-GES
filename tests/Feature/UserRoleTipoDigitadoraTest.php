@@ -120,9 +120,14 @@ class UserRoleTipoDigitadoraTest extends TestCase
         }
     }
 
-    public function test_digitadora_accepts_only_the_two_valid_types(): void
+    public function test_digitadora_accepts_all_supported_types_including_non_confidential_restricted(): void
     {
-        foreach ([User::TIPO_DIGITADORA_NO_CONFIDENCIAL, User::TIPO_DIGITADORA_CONFIDENCIAL] as $tipo) {
+        foreach ([
+            User::TIPO_DIGITADORA_NO_CONFIDENCIAL,
+            User::TIPO_DIGITADORA_CONFIDENCIAL,
+            User::TIPO_DIGITADORA_RESTRINGIDO,
+            User::TIPO_DIGITADORA_NO_CONFIDENCIAL_RESTRINGIDO,
+        ] as $tipo) {
             $this->crear($this->payload('dig-'.strtolower($tipo), ['id_rol' => $this->rolDigitadora->id_rol, 'tipo_digitadora' => $tipo]))
                 ->assertCreated()
                 ->assertJsonPath('data.tipo_digitadora', $tipo);

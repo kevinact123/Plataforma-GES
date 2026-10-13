@@ -26,6 +26,8 @@
             <div class="col-12 col-md-4"><label class="form-label" for="new-patient-name">Nombre</label><input class="form-control" id="new-patient-name" name="nombre" maxlength="100" required></div>
             <div class="col-12 col-md-4"><label class="form-label" for="new-patient-lastname">Apellido paterno</label><input class="form-control" id="new-patient-lastname" name="apellido_paterno" maxlength="100" required></div>
             <div class="col-12 col-md-4"><label class="form-label" for="new-patient-mother-lastname">Apellido materno</label><input class="form-control" id="new-patient-mother-lastname" name="apellido_materno" maxlength="100"></div>
+            <div class="col-12 col-md-4"><label class="form-label" for="new-patient-arrival">Hora de llegada</label><input class="form-control" id="new-patient-arrival" name="hora_llegada" type="datetime-local"></div>
+            <div class="col-12 col-md-4"><label class="form-label" for="new-patient-attention">Hora de atención</label><input class="form-control" id="new-patient-attention" name="hora_atencion" type="datetime-local"></div>
             <div class="col-12 col-md-4"><label class="form-label" for="new-patient-birthdate">Hora de cierre DAU</label><input class="form-control" id="new-patient-birthdate" name="hora_cierre_dau" type="datetime-local"></div>
             <div class="col-12 col-md-4"><label class="form-label" for="new-patient-sex">Sexo</label><select class="form-select" id="new-patient-sex" name="sexo"><option value="">Seleccionar</option><option value="F">Femenino</option><option value="M">Masculino</option><option value="O">Otro</option></select></div>
             <div class="col-12"><button class="btn btn-primary" id="save-patient" type="submit"><i class="bi bi-person-plus me-1" aria-hidden="true"></i>Guardar paciente</button></div>
@@ -41,9 +43,21 @@
                 <label class="form-label" for="patient-rut">RUT</label>
                 <input class="form-control" id="patient-rut" name="rut" type="search" placeholder="Ej. 12.345 (busca por inicio)" autocomplete="off">
             </div>
-            <div class="col-12 col-md-5">
+            <div class="col-12 col-md-3">
                 <label class="form-label" for="patient-name">Nombre o apellido</label>
                 <input class="form-control" id="patient-name" name="nombre" type="search" placeholder="Ej. A (nombres o apellidos que empiecen así)" autocomplete="off">
+            </div>
+            <div class="col-6 col-md-2">
+                <label class="form-label" for="patient-has-records">Registros</label>
+                <select class="form-select" id="patient-has-records" name="con_registros">
+                    <option value="">Todos</option>
+                    <option value="si">Con registros</option>
+                    <option value="no">Sin registros</option>
+                </select>
+            </div>
+            <div class="col-6 col-md-1">
+                <label class="form-label" for="patient-page-number">Página</label>
+                <input class="form-control" id="patient-page-number" name="pagina" type="number" min="1" value="1" inputmode="numeric">
             </div>
             <div class="col-auto">
                 <button class="btn btn-primary" type="submit"><i class="bi bi-search me-1" aria-hidden="true"></i>Buscar</button>
@@ -67,6 +81,8 @@
                     <th scope="col"><input class="form-check-input" id="select-all-patients" type="checkbox" aria-label="Seleccionar todos los pacientes de la página"></th>
                     <th scope="col">RUT</th>
                     <th scope="col">Paciente</th>
+                    <th scope="col">Hora de llegada</th>
+                    <th scope="col">Hora de atención</th>
                     <th scope="col">Hora de cierre DAU</th>
                     <th scope="col">Registros GES</th>
                     <th scope="col" class="text-end">Acciones</th>
@@ -158,6 +174,8 @@
                 <td><input class="form-check-input patient-selection" type="checkbox" value="${patient.id_paciente}" aria-label="Seleccionar paciente ${escapeHtml(fullName)}"></td>
                 <td class="fw-semibold">${escapeHtml(patient.rut)}</td>
                 <td>${escapeHtml(fullName)}</td>
+                <td>${escapeHtml(formatDateTime(patient.hora_llegada))}</td>
+                <td>${escapeHtml(formatDateTime(patient.hora_atencion))}</td>
                 <td>${escapeHtml(formatDateTime(patient.hora_cierre_dau))}</td>
                 <td><span class="badge text-bg-primary" title="${records.length} registro(s) GES y ${documentCount} documento(s)">${records.length + documentCount}</span></td>
                 <td class="text-end">
@@ -192,13 +210,20 @@
         const params = new URLSearchParams({ page, per_page: 15 });
         if (rut) params.set('rut', rut);
         if (name) params.set('nombre', name);
+        const hasRecords = document.getElementById('patient-has-records').value;
+        if (hasRecords) params.set('con_registros', hasRecords);
 
         try {
             const payload = await apiFetch(`/api/pacientes?${params}`);
             if (!payload) return;
+            const lastAvailablePage = payload.meta?.last_page || 1;
+            if (page > lastAvailablePage) return loadPatients(lastAvailablePage);
             const patients = payload.data || [];
             currentPage = payload.meta?.current_page || page;
-            lastPage = payload.meta?.last_page || 1;
+            lastPage = lastAvailablePage;
+            const pageInput = document.getElementById('patient-page-number');
+            pageInput.value = currentPage;
+            pageInput.max = lastPage;
             renderRows(patients);
             count.textContent = `${payload.meta?.total ?? patients.length} pacientes`;
             pageLabel.textContent = lastPage > 1 ? `Página ${currentPage} de ${lastPage}` : `${patients.length} resultado(s)`;
@@ -228,6 +253,8 @@
             document.getElementById('patient-modal-title').textContent = fullName;
             document.getElementById('patient-modal-rut').textContent = `RUT ${patient.rut}`;
             body.innerHTML = `<div class="row g-3 mb-4">
+                <div class="col-sm-4"><div class="small text-muted">Hora de llegada</div><div class="fw-semibold">${escapeHtml(formatDateTime(patient.hora_llegada))}</div></div>
+                <div class="col-sm-4"><div class="small text-muted">Hora de atención</div><div class="fw-semibold">${escapeHtml(formatDateTime(patient.hora_atencion))}</div></div>
                 <div class="col-sm-4"><div class="small text-muted">Hora de cierre DAU</div><div class="fw-semibold">${escapeHtml(formatDateTime(patient.hora_cierre_dau))}</div></div>
                 <div class="col-sm-4"><div class="small text-muted">Sexo</div><div class="fw-semibold">${escapeHtml(patient.sexo)}</div></div>
                 <div class="col-sm-4"><div class="small text-muted">Estado</div><div class="fw-semibold">${patient.activo ? 'Activo' : 'Inactivo'}</div></div>
@@ -246,7 +273,12 @@
         clearTimeout(searchTimer);
         searchTimer = setTimeout(() => loadPatients(1), 300);
     }));
-    document.getElementById('patient-search-form').addEventListener('submit', (event) => { event.preventDefault(); loadPatients(1); });
+    document.getElementById('patient-has-records').addEventListener('change', () => loadPatients(1));
+    document.getElementById('patient-search-form').addEventListener('submit', (event) => {
+        event.preventDefault();
+        const requestedPage = parseInt(document.getElementById('patient-page-number').value, 10);
+        loadPatients(Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1);
+    });
     document.getElementById('refresh-patients').addEventListener('click', async (event) => {
         const button = event.currentTarget;
         if (button.disabled) return;
@@ -256,7 +288,7 @@
         button.innerHTML = '<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>Actualizando...';
         try { await loadPatients(currentPage); } finally { button.disabled = false; button.removeAttribute('aria-busy'); button.innerHTML = label; }
     });
-    document.getElementById('clear-search').addEventListener('click', () => { document.getElementById('patient-rut').value = ''; document.getElementById('patient-name').value = ''; loadPatients(1); });
+    document.getElementById('clear-search').addEventListener('click', () => { document.getElementById('patient-rut').value = ''; document.getElementById('patient-name').value = ''; document.getElementById('patient-has-records').value = ''; loadPatients(1); });
     document.getElementById('previous-page').addEventListener('click', () => loadPatients(currentPage - 1));
     document.getElementById('next-page').addEventListener('click', () => loadPatients(currentPage + 1));
     selectAllPatients.addEventListener('change', () => {

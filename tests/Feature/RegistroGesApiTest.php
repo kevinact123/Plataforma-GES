@@ -132,6 +132,43 @@ class RegistroGesApiTest extends TestCase
             ->assertJsonFragment(['id_registro' => $registroPendiente->id_registro]);
     }
 
+    public function test_creating_registro_ges_generates_pending_hito_named_after_record_type(): void
+    {
+        $user = $this->createUserWithAccess();
+        $this->createRegistroGesRelatedTables();
+        PermisoPatologia::query()
+            ->where('id_usuario', $user->id_usuario)
+            ->update(['puede_editar' => true]);
+
+        $paciente = Paciente::create([
+            'rut' => '66.666.666-6',
+            'nombre' => 'Paciente',
+            'apellido_paterno' => 'Prueba',
+            'activo' => true,
+        ]);
+        $tipoRegistro = TipoRegistro::create([
+            'nombre' => 'Orden de Atención',
+            'descripcion' => 'Orden de Atención',
+            'activo' => true,
+        ]);
+
+        $response = $this->actingAs($user, 'sanctum')->postJson('/api/registros-ges', [
+            'id_paciente' => $paciente->id_paciente,
+            'id_patologia' => Patologia::first()->id_patologia,
+            'id_prioridad' => Prioridad::first()->id_prioridad,
+            'id_tipo_registro' => $tipoRegistro->id_tipo_registro,
+            'fecha_ingreso' => '2026-10-13',
+        ]);
+
+        $response->assertCreated();
+        $this->assertDatabaseHas('hitos', [
+            'id_registro' => $response->json('data.id_registro'),
+            'id_usuario' => $user->id_usuario,
+            'nombre' => 'Orden de Atención',
+            'estado' => 'pendiente',
+        ]);
+    }
+
     public function test_can_list_add_update_and_remove_associated_pathologies(): void
     {
         $user = $this->createUserWithAccess();

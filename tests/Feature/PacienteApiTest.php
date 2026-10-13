@@ -88,6 +88,24 @@ class PacienteApiTest extends TestCase
             ->assertJsonFragment(['rut' => '18.765.432-1']);
     }
 
+    public function test_patients_can_be_filtered_by_having_records(): void
+    {
+        $user = User::create([
+            'nombre' => 'Ana',
+            'apellido' => 'Soto',
+            'username' => 'ana.filtro',
+            'password' => bcrypt('secret123'),
+            'id_rol' => $this->createRoleWithDefaultPermissions('digitadora')->id_rol,
+            'activo' => true,
+        ]);
+        Paciente::create(['rut' => '18.765.432-1', 'nombre' => 'Mario', 'apellido_paterno' => 'Vega', 'fecha_nacimiento' => '1984-09-01', 'activo' => true]);
+
+        $this->actingAs($user, 'sanctum')->getJson('/api/pacientes?con_registros=no')
+            ->assertOk()->assertJsonCount(1, 'data');
+        $this->actingAs($user, 'sanctum')->getJson('/api/pacientes?con_registros=si')
+            ->assertOk()->assertJsonCount(0, 'data');
+    }
+
     public function test_patients_can_be_searched_by_name_or_surname(): void
     {
         $user = User::create([

@@ -105,6 +105,82 @@ class GestionUsuariosApiTest extends TestCase
         $this->assertSame([$restringida->id_patologia], $user->permisosPatologia()->pluck('id_patologia')->all());
     }
 
+    public function test_non_confidential_digitadora_only_keeps_normal_pathology_permissions(): void
+    {
+        Rol::create(['nombre' => 'digitadora', 'descripcion' => 'Digitadora estándar']);
+        $restringida = Patologia::create(['numero_ges' => 63, 'nombre' => 'Restringida', 'confidencial' => false, 'activo' => true]);
+        $normal = Patologia::create(['numero_ges' => 92, 'nombre' => 'Normal', 'confidencial' => false, 'activo' => true]);
+
+        $data = app(GestionUsuariosService::class)->crearDigitadora([
+            'nombre' => 'Nora',
+            'apellido' => 'Normal',
+            'username' => 'nora.normal',
+            'correo' => 'nora.normal@example.com',
+            'password' => 'secret123',
+            'tipo_digitadora' => User::TIPO_DIGITADORA_NO_CONFIDENCIAL,
+            'permisos' => [
+                ['id_patologia' => $restringida->id_patologia, 'puede_ver' => true],
+                ['id_patologia' => $normal->id_patologia, 'puede_ver' => true],
+            ],
+        ]);
+
+        $this->assertSame([$normal->id_patologia], User::findOrFail($data['id_usuario'])->permisosPatologia()->pluck('id_patologia')->all());
+    }
+
+    public function test_updating_non_confidential_digitadora_removes_legacy_restricted_permissions(): void
+    {
+        $role = Rol::create(['nombre' => 'digitadora', 'descripcion' => 'Digitadora estándar']);
+        $user = User::create([
+            'nombre' => 'Luciana',
+            'apellido' => 'Contreras',
+            'username' => 'luciana.contreras',
+            'correo' => 'luciana.contreras@example.com',
+            'password' => bcrypt('secret123'),
+            'id_rol' => $role->id_rol,
+            'tipo_digitadora' => User::TIPO_DIGITADORA_NO_CONFIDENCIAL,
+            'activo' => true,
+        ]);
+        $restringida = Patologia::create(['numero_ges' => 63, 'nombre' => 'Restringida', 'confidencial' => false, 'activo' => true]);
+        PermisoPatologia::create([
+            'id_usuario' => $user->id_usuario,
+            'id_patologia' => $restringida->id_patologia,
+            'puede_ver' => true,
+            'puede_editar' => false,
+            'puede_asignar' => false,
+        ]);
+
+        app(GestionUsuariosService::class)->actualizarDigitadora($user, [
+            'tipo_digitadora' => User::TIPO_DIGITADORA_NO_CONFIDENCIAL,
+        ]);
+
+        $this->assertSame(0, $user->permisosPatologia()->count());
+    }
+
+    public function test_non_confidential_restricted_digitadora_keeps_both_pathology_groups(): void
+    {
+        Rol::create(['nombre' => 'digitadora', 'descripcion' => 'Digitadora estándar']);
+        $restringida = Patologia::create(['numero_ges' => 63, 'nombre' => 'Restringida', 'confidencial' => false, 'activo' => true]);
+        $normal = Patologia::create(['numero_ges' => 92, 'nombre' => 'Normal', 'confidencial' => false, 'activo' => true]);
+
+        $data = app(GestionUsuariosService::class)->crearDigitadora([
+            'nombre' => 'Rita',
+            'apellido' => 'Combinada',
+            'username' => 'rita.combinada',
+            'correo' => 'rita.combinada@example.com',
+            'password' => 'secret123',
+            'tipo_digitadora' => User::TIPO_DIGITADORA_NO_CONFIDENCIAL_RESTRINGIDO,
+            'permisos' => [
+                ['id_patologia' => $restringida->id_patologia, 'puede_ver' => true],
+                ['id_patologia' => $normal->id_patologia, 'puede_ver' => true],
+            ],
+        ]);
+
+        $this->assertEqualsCanonicalizing(
+            [$normal->id_patologia, $restringida->id_patologia],
+            User::findOrFail($data['id_usuario'])->permisosPatologia()->pluck('id_patologia')->all(),
+        );
+    }
+
     public function test_updating_type_without_permissions_keeps_existing_explicit_pathology_permissions(): void
     {
         $role = Rol::create(['nombre' => 'digitadora', 'descripcion' => 'Digitadora estándar']);

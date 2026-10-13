@@ -137,11 +137,15 @@ class HitoService
                 $hito->fecha_completado = null;
             }
 
+            $nuevaObservacion = trim((string) ($data['observacion'] ?? ''));
+
             $hito->update([
                 'estado' => $estadoNuevo,
                 'fecha_inicio' => $hito->fecha_inicio ?? now(),
                 'fecha_completado' => $hito->fecha_completado,
-                'observacion' => $this->fusionarObservacion($hito->observacion, $data['observacion'] ?? 'Cambio de estado del hito'),
+                'observacion' => $nuevaObservacion !== ''
+                    ? $this->fusionarObservacion($hito->observacion, $nuevaObservacion)
+                    : $hito->observacion,
             ]);
 
             app(RegistroGesAuditService::class)->registrar(

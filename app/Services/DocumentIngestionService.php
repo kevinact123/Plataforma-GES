@@ -398,7 +398,7 @@ class DocumentIngestionService
     private function patientAttributes(array $datos, bool $forCreate = false): array
     {
         $attributes = [];
-        foreach (['nombre', 'apellido_paterno', 'apellido_materno', 'hora_cierre_dau', 'sexo'] as $field) {
+        foreach (['nombre', 'apellido_paterno', 'apellido_materno', 'hora_cierre_dau', 'hora_llegada', 'hora_atencion', 'sexo'] as $field) {
             if (array_key_exists($field, $datos) && $datos[$field] !== '') {
                 $attributes[$field] = $datos[$field];
             }

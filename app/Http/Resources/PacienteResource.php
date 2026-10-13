@@ -16,6 +16,8 @@ class PacienteResource extends JsonResource
             'apellido_paterno' => $this->apellido_paterno,
             'apellido_materno' => $this->apellido_materno,
             'hora_cierre_dau' => $this->hora_cierre_dau?->format('Y-m-d H:i:s'),
+            'hora_llegada' => $this->hora_llegada?->format('Y-m-d H:i:s'),
+            'hora_atencion' => $this->hora_atencion?->format('Y-m-d H:i:s'),
             'sexo' => $this->sexo,
             'activo' => $this->activo,
             'fecha_registro' => $this->fecha_registro?->toISOString(),

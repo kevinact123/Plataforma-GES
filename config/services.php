@@ -35,4 +35,11 @@ return [
         ],
     ],
 
+    'ocr' => [
+        'tesseract_path' => env('OCR_TESSERACT_PATH', 'C:\\Program Files\\Tesseract-OCR\\tesseract.exe'),
+        'pdftotext_path' => env('OCR_PDFTOTEXT_PATH'),
+        'pdftoppm_path' => env('OCR_PDFTOPPM_PATH'),
+        'lang' => env('OCR_LANG', 'spa'),
+    ],
+
 ];

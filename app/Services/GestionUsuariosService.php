@@ -207,6 +207,14 @@ class GestionUsuariosService
             $user->permisosPatologia()
                 ->whereNotIn('id_patologia', Patologia::query()->restringidas()->select('id_patologia'))
                 ->delete();
+
+            return;
+        }
+
+        if ($user->tipo_digitadora === User::TIPO_DIGITADORA_NO_CONFIDENCIAL) {
+            $user->permisosPatologia()
+                ->whereIn('id_patologia', Patologia::query()->restringidas()->select('id_patologia'))
+                ->delete();
         }
     }
 

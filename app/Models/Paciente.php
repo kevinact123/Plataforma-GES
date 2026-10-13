@@ -22,6 +22,8 @@ class Paciente extends Model
         'apellido_materno',
         'fecha_nacimiento',
         'hora_cierre_dau',
+        'hora_llegada',
+        'hora_atencion',
         'sexo',
         'prevision',
         'tipo_fonasa',
@@ -46,6 +48,8 @@ class Paciente extends Model
         return [
             'fecha_nacimiento' => 'date',
             'hora_cierre_dau' => 'datetime',
+            'hora_llegada' => 'datetime',
+            'hora_atencion' => 'datetime',
             'ingreso' => 'datetime',
             'edad' => 'integer',
             'activo' => 'boolean',

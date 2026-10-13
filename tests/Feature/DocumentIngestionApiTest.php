@@ -299,6 +299,33 @@ class DocumentIngestionApiTest extends TestCase
         });
     }
 
+    public function test_detects_unregistered_patient_and_adds_it(): void
+    {
+        $archivo = UploadedFile::fake()->createWithContent('ficha.txt', "Ficha clinica\nPaciente atendido hoy\nMaria Soledad Perez Rojas 12.345.678-5\n", 'text/plain');
+        $id = $this->withHeader('Accept', 'application/json')->actingAs($this->usuario)
+            ->post('/api/documentacion/ingerir', ['documento' => $archivo])->json('data.id_documento');
+
+        $detect = $this->withHeader('Accept', 'application/json')->actingAs($this->usuario)
+            ->postJson("/api/documentacion/{$id}/detectar-paciente");
+        $detect->assertOk()
+            ->assertJsonPath('data.status', 'no_registrado')
+            ->assertJsonPath('data.rut', '12.345.678-5')
+            ->assertJsonPath('data.nombre', 'Maria Soledad Perez Rojas');
+
+        $this->withHeader('Accept', 'application/json')->actingAs($this->usuario)
+            ->postJson("/api/documentacion/{$id}/agregar-paciente", ['rut' => '12.345.678-5', 'nombre' => 'Maria Soledad Perez Rojas'])
+            ->assertCreated();
+
+        $paciente = Paciente::where('rut', '12.345.678-5')->first();
+        $this->assertNotNull($paciente);
+        $this->assertSame('Perez', $paciente->apellido_paterno);
+        $this->assertSame($paciente->id_paciente, DocumentoGeneral::find($id)->id_paciente);
+
+        $this->withHeader('Accept', 'application/json')->actingAs($this->usuario)
+            ->postJson("/api/documentacion/{$id}/detectar-paciente")
+            ->assertOk()->assertJsonPath('data.status', 'registrado');
+    }
+
     /**
      * Test: Rechazar importación con errores de validación
      */

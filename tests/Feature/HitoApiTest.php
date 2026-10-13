@@ -259,6 +259,13 @@ class HitoApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.estado', 'completado');
 
+        $response = $this->actingAs($admin, 'sanctum')
+            ->postJson('/api/hitos/' . $hito->id_hito . '/estado', ['estado' => 'pendiente'])
+            ->assertOk();
+        $this->assertStringContainsString('Sin iniciar', $response->json('data.observacion'));
+        $this->assertStringContainsString('Se finalizó la revisión', $response->json('data.observacion'));
+        $this->assertStringNotContainsString('Cambio de estado del hito', $response->json('data.observacion'));
+
         $this->actingAs($admin, 'sanctum')
             ->deleteJson('/api/hitos/' . $hito->id_hito)
             ->assertOk();

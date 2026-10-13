@@ -18,6 +18,7 @@ use App\Models\Prioridad;
 use App\Models\RegistroGes;
 use App\Models\RegistroGesPatologia;
 use App\Models\TipoRegistro;
+use App\Services\HitoService;
 use App\Services\RegistroGesService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -101,6 +102,8 @@ class RegistroGesController extends Controller
         $asociadas = $validated['patologias_asociadas'] ?? [];
         $tipoAsociacion = $validated['tipo_asociacion'] ?? 'complicacion';
         $observacionAsociacion = $validated['observacion_asociacion'] ?? null;
+        $nombreHito = TipoRegistro::query()->findOrFail($validated['id_tipo_registro'])->nombre;
+        $usuarioActual = $request->user();
         unset($validated['patologias_asociadas'], $validated['tipo_asociacion'], $validated['observacion_asociacion']);
 
         if ($asociadas && ! Schema::hasTable('registro_ges_patologias')) {
@@ -117,8 +120,13 @@ class RegistroGesController extends Controller
             }
         }
 
-        $registro = DB::transaction(function () use ($validated, $asociadas, $tipoAsociacion, $observacionAsociacion): RegistroGes {
+        $registro = DB::transaction(function () use ($validated, $asociadas, $tipoAsociacion, $observacionAsociacion, $nombreHito, $usuarioActual): RegistroGes {
             $registro = RegistroGes::create($validated);
+
+            app(HitoService::class)->crear($usuarioActual, $registro->id_registro, [
+                'nombre' => $nombreHito,
+            ]);
+
             if (Schema::hasTable('registro_ges_patologias')) {
                 foreach ($asociadas as $idPatologiaAsociada) {
                     $registro->asociacionesPatologia()->create([

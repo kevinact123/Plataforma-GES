@@ -69,6 +69,8 @@ Route::middleware(['auth:sanctum', 'inactivity', 'confidential'])->group(functio
         Route::post('/documentacion/ingerir', [DocumentIngestionController::class, 'ingest']);
         Route::post('/documentacion', [DocumentoGeneralController::class, 'store']);
         Route::post('/documentacion/{documento}/importar', [DocumentIngestionController::class, 'import']);
+        Route::post('/documentacion/{documento}/detectar-paciente', [\App\Http\Controllers\DocumentPatientController::class, 'detect']);
+        Route::post('/documentacion/{documento}/agregar-paciente', [\App\Http\Controllers\DocumentPatientController::class, 'addPatient']);
     });
     Route::middleware('permission:editar_registros')->group(function (): void {
         Route::post('/documentacion/categorias', [DocumentoGeneralController::class, 'storeCategory']);

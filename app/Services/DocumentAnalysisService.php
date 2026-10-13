@@ -15,6 +15,8 @@ class DocumentAnalysisService
         'apellido_paterno' => ['apellido_paterno', 'apellido paterno', 'primer_apellido', 'a paterno', 'apaterno'],
         'apellido_materno' => ['apellido_materno', 'apellido materno', 'segundo_apellido', 'a materno', 'amaterno'],
         'hora_cierre_dau' => ['hora_cierre_dau', 'hora cierre dau', 'hora de cierre dau', 'hora cierre'],
+        'hora_llegada' => ['hora_llegada', 'hora llegada', 'hora de llegada', 'hora admision', 'hora de admision'],
+        'hora_atencion' => ['hora_atencion', 'hora atencion', 'hora de atencion', 'hora de atención', 'hora atencion selector', 'hora ingreso box', 'hora atencion oftalm.', 'hora atencion profesional', 'hora atencion medica'],
         'sexo' => ['sexo', 'genero', 'género'],
         'domicilio' => ['domicilio', 'direccion', 'dirección'],
         'atencion' => ['atencion', 'atención'],
@@ -58,6 +60,8 @@ class DocumentAnalysisService
                 'apellido_paterno' => ['nullable', 'string', 'max:100'],
                 'apellido_materno' => ['nullable', 'string', 'max:100'],
                 'hora_cierre_dau' => ['nullable', 'date'],
+                'hora_llegada' => ['nullable', 'date'],
+                'hora_atencion' => ['nullable', 'date'],
                 'sexo' => ['nullable', 'string', 'max:20'],
                 'domicilio' => ['nullable', 'string', 'max:255'],
                 'atencion' => ['nullable', 'string', 'max:100'],
@@ -337,7 +341,7 @@ class DocumentAnalysisService
             return $this->normalizeRut($value);
         }
 
-        if ($key === 'hora_cierre_dau') {
+        if (in_array($key, ['hora_cierre_dau', 'hora_llegada', 'hora_atencion'], true)) {
             return $this->normalizeDateTimeValue($value);
         }
 

@@ -165,6 +165,13 @@
         if (currentUserDetail) currentUserDetail.textContent = `${currentUser.nombre} ${currentUser.apellido || ''} · ${role}`;
     }
 
+    const isDigitadora = Boolean(currentUser) && !currentUser.es_admin && String(currentUser.rol || '').toLowerCase() === 'digitadora';
+    const digitadoraHiddenPaths = ['/dashboard', '/documentacion', '/asignaciones'];
+
+    if (isDigitadora && digitadoraHiddenPaths.includes(window.location.pathname.replace(/\/+$/, ''))) {
+        window.location.replace('{{ route('pacientes') }}');
+    }
+
     function applyMenuPermissions(permissions) {
         if (!Array.isArray(permissions)) return;
         const granted = new Set(permissions);
@@ -173,6 +180,12 @@
         });
         const canAssign = permissions.some((p) => ['administrar_usuarios', 'asignar_pacientes', 'reasignar_pacientes'].includes(p));
         document.getElementById('assignments-nav-item')?.classList.toggle('d-none', !canAssign);
+        if (isDigitadora) {
+            ['dashboard', 'documentacion'].forEach((name) => {
+                document.querySelector(`.sidebar a[href$="/${name}"]`)?.closest('li')?.classList.add('d-none');
+            });
+            document.getElementById('assignments-nav-item')?.classList.add('d-none');
+        }
     }
 
     applyMenuPermissions(currentUser?.permissions);
