@@ -64,6 +64,11 @@
     </div>
 </div>
 
+<footer class="text-center text-muted small py-3">
+    <div>Sistema de Gestión de Garantías Explícitas en Salud</div>
+    <div>developed by Kevin Cuevas</div>
+</footer>
+
 <!-- Bootstrap 5 JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="{{ asset('js/auto-dismiss-alerts.js') }}"></script>

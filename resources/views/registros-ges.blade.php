@@ -277,6 +277,7 @@
                         </div>
 
                         <form id="edit-registro-form" class="row g-3 d-none" data-registro-id="${id}">
+                          <div id="edit-registro-error" class="alert alert-danger d-none col-12" role="alert"></div>
                           <div class="col-md-4">
                             <label class="form-label" for="edit_id_paciente">Paciente</label>
                             <select class="form-select" id="edit_id_paciente" name="id_paciente" required></select>
@@ -463,16 +464,26 @@
                 const form = submitEvent.target;
                 const formData = new FormData(form);
                 const file = formData.get('documento');
-                const payload = Object.fromEntries(formData.entries());
-
-                Object.keys(payload).forEach((key) => {
-                    if (payload[key] === '' || payload[key] === null) {
-                        delete payload[key];
-                    }
-                    if (['id_paciente', 'id_patologia', 'id_prioridad', 'id_tipo_registro'].includes(key)) {
-                        payload[key] = Number(payload[key]);
-                    }
+                const payload = Object.fromEntries([
+                    'id_paciente',
+                    'id_patologia',
+                    'id_prioridad',
+                    'id_tipo_registro',
+                    'tipo_tratamiento',
+                    'estado',
+                    'fecha_ingreso',
+                    'fecha_limite',
+                    'observaciones',
+                ].map((key) => [key, formData.get(key)]));
+                ['id_paciente', 'id_patologia', 'id_prioridad', 'id_tipo_registro'].forEach((key) => {
+                    payload[key] = Number(payload[key]);
                 });
+                const submitButton = form.querySelector('button[type="submit"]');
+                const editError = document.getElementById('edit-registro-error');
+                editError.textContent = '';
+                editError.classList.add('d-none');
+                submitButton.disabled = true;
+                submitButton.textContent = 'Guardando...';
 
                 try {
                     await apiRequest(`{{ url('/api/registros-ges') }}/${id}`, {
@@ -496,7 +507,11 @@
                     modal.hide();
                     loadRegistros();
                 } catch (error) {
-                    showMessage(error.message, 'danger');
+                    editError.textContent = error.message;
+                    editError.classList.remove('d-none');
+                } finally {
+                    submitButton.disabled = false;
+                    submitButton.textContent = 'Guardar cambios';
                 }
             });
         } catch (error) {

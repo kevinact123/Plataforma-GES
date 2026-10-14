@@ -1,6 +1,7 @@
 <footer class="border-top bg-light py-3 mt-auto">
     <div class="container-fluid text-center text-muted small">
-        Plataforma GES
+        <div>Sistema de Gestión de Garantías Explícitas en Salud</div>
+        <div>developed by Kevin Cuevas</div>
     </div>
 </footer>
 

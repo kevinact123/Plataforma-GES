@@ -169,6 +169,56 @@ class RegistroGesApiTest extends TestCase
         ]);
     }
 
+    public function test_can_update_registro_ges_and_clear_optional_fields(): void
+    {
+        $user = $this->createUserWithAccess();
+        $patologia = Patologia::first();
+        PermisoPatologia::query()
+            ->where('id_usuario', $user->id_usuario)
+            ->where('id_patologia', $patologia->id_patologia)
+            ->update(['puede_editar' => true]);
+
+        $paciente = Paciente::create([
+            'rut' => '67.777.777-7',
+            'nombre' => 'Paciente',
+            'apellido_paterno' => 'Prueba',
+            'activo' => true,
+        ]);
+        $registro = RegistroGes::create([
+            'id_paciente' => $paciente->id_paciente,
+            'id_patologia' => $patologia->id_patologia,
+            'id_prioridad' => Prioridad::first()->id_prioridad,
+            'id_tipo_registro' => TipoRegistro::first()->id_tipo_registro,
+            'fecha_ingreso' => '2026-10-13',
+            'fecha_limite' => '2026-10-20',
+            'estado' => 'Pendiente',
+            'observaciones' => 'Observación anterior',
+        ]);
+
+        $this->actingAs($user, 'sanctum')
+            ->putJson('/api/registros-ges/' . $registro->id_registro, [
+                'id_paciente' => $paciente->id_paciente,
+                'id_patologia' => $patologia->id_patologia,
+                'id_prioridad' => Prioridad::first()->id_prioridad,
+                'id_tipo_registro' => TipoRegistro::first()->id_tipo_registro,
+                'fecha_ingreso' => '2026-10-14',
+                'fecha_limite' => '2026-10-21',
+                'estado' => 'Completado',
+                'observaciones' => '',
+                'tipo_tratamiento' => '',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.estado', 'Completado')
+            ->assertJsonPath('data.fecha_ingreso', '2026-10-14');
+
+        $this->assertDatabaseHas('registros_ges', [
+            'id_registro' => $registro->id_registro,
+            'estado' => 'Completado',
+            'observaciones' => null,
+            'tipo_tratamiento' => null,
+        ]);
+    }
+
     public function test_can_list_add_update_and_remove_associated_pathologies(): void
     {
         $user = $this->createUserWithAccess();

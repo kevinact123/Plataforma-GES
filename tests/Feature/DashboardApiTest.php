@@ -216,7 +216,10 @@ class DashboardApiTest extends TestCase
         $this->actingAs($admin, 'sanctum')
             ->getJson('/api/dashboard/resumen?mes=2026-08')
             ->assertOk()
-            ->assertJsonPath('total_registros', 3);
+            ->assertJsonPath('total_registros', 3)
+            ->assertJsonPath('registros_pendientes', 2)
+            ->assertJsonPath('registros_en_proceso', 1)
+            ->assertJsonPath('registros_completados', 1);
 
         $this->actingAs($admin, 'sanctum')
             ->getJson('/api/dashboard/resumen?mes=2026-07')
