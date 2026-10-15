@@ -76,7 +76,12 @@ class RegistroGes extends Model
 
     public function scopeByRecordType(Builder $query, int $recordTypeId): Builder
     {
-        return $query->where('id_tipo_registro', $recordTypeId);
+        return $query->where(function (Builder $typeQuery) use ($recordTypeId): void {
+            $typeQuery->where('id_tipo_registro', $recordTypeId);
+            if (Schema::hasTable('registro_ges_tipos')) {
+                $typeQuery->orWhereHas('tiposRegistro', fn (Builder $query) => $query->where('tipos_registro.id_tipo_registro', $recordTypeId));
+            }
+        });
     }
 
     public function scopeByStatus(Builder $query, string $status): Builder
@@ -117,6 +122,19 @@ class RegistroGes extends Model
     public function tipoRegistro(): BelongsTo
     {
         return $this->belongsTo(TipoRegistro::class, 'id_tipo_registro', 'id_tipo_registro');
+    }
+
+    public function tiposRegistro(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            TipoRegistro::class,
+            'registro_ges_tipos',
+            'id_registro',
+            'id_tipo_registro',
+            'id_registro',
+            'id_tipo_registro',
+        )->withPivot(['id_registro_tipo', 'puntaje_complejidad'])
+            ->orderBy('registro_ges_tipos.id_registro_tipo');
     }
 
     public function asignaciones(): HasMany

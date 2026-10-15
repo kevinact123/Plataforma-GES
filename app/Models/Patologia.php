@@ -53,7 +53,7 @@ class Patologia extends Model
             $pathologyQuery->whereIn('id_patologia', $patologiasPermitidas);
 
             if ($user->hasRole('digitadora')
-                && $user->tipo_digitadora === User::TIPO_DIGITADORA_CONFIDENCIAL) {
+                && in_array($user->tipo_digitadora, User::TIPOS_DIGITADORA_CONFIDENCIAL, true)) {
                 $pathologyQuery->orWhere('confidencial', true);
             }
         })->when(! $user->puedeAccederAConfidenciales(), fn (Builder $publicQuery) => $publicQuery

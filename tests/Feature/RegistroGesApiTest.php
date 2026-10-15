@@ -169,6 +169,122 @@ class RegistroGesApiTest extends TestCase
         ]);
     }
 
+    public function test_can_create_one_registro_with_multiple_types_and_summed_average_complexity(): void
+    {
+        $user = $this->createUserWithAccess();
+        $this->createRegistroGesRelatedTables();
+        Schema::create('registro_ges_tipos', function ($table): void {
+            $table->id('id_registro_tipo');
+            $table->unsignedBigInteger('id_registro');
+            $table->unsignedBigInteger('id_tipo_registro');
+            $table->decimal('puntaje_complejidad', 8, 2)->nullable();
+            $table->unique(['id_registro', 'id_tipo_registro']);
+        });
+        Schema::create('complejidad_registro', function ($table): void {
+            $table->id('id_complejidad');
+            $table->unsignedBigInteger('id_usuario');
+            $table->unsignedBigInteger('id_tipo_registro');
+            $table->unsignedInteger('puntaje');
+            $table->string('observacion')->nullable();
+            $table->timestamp('fecha_evaluacion')->nullable();
+        });
+        PermisoPatologia::query()
+            ->where('id_usuario', $user->id_usuario)
+            ->update(['puede_editar' => true]);
+
+        $paciente = Paciente::create([
+            'rut' => '68.888.888-8',
+            'nombre' => 'Paciente',
+            'apellido_paterno' => 'Prueba',
+            'activo' => true,
+        ]);
+        $tipoPrincipal = TipoRegistro::first();
+        $tipoSecundario = TipoRegistro::create([
+            'nombre' => 'SIC',
+            'descripcion' => 'SIC',
+            'activo' => true,
+        ]);
+
+        foreach ([
+            [$tipoPrincipal->id_tipo_registro, 2],
+            [$tipoPrincipal->id_tipo_registro, 4],
+            [$tipoSecundario->id_tipo_registro, 3],
+            [$tipoSecundario->id_tipo_registro, 5],
+        ] as [$idTipo, $puntaje]) {
+            DB::table('complejidad_registro')->insert([
+                'id_usuario' => $user->id_usuario,
+                'id_tipo_registro' => $idTipo,
+                'puntaje' => $puntaje,
+                'fecha_evaluacion' => now(),
+            ]);
+        }
+
+        $response = $this->actingAs($user, 'sanctum')->postJson('/api/registros-ges', [
+            'id_paciente' => $paciente->id_paciente,
+            'id_patologia' => Patologia::first()->id_patologia,
+            'id_prioridad' => Prioridad::first()->id_prioridad,
+            'id_tipo_registro' => $tipoPrincipal->id_tipo_registro,
+            'tipos_registro' => [$tipoPrincipal->id_tipo_registro, $tipoSecundario->id_tipo_registro],
+        ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('data.id_tipo_registro', $tipoPrincipal->id_tipo_registro)
+            ->assertJsonPath('data.complejidad_total', 7)
+            ->assertJsonCount(2, 'data.tipos_registro');
+        $this->assertDatabaseCount('registros_ges', 1);
+        $this->assertDatabaseHas('registro_ges_tipos', [
+            'id_registro' => $response->json('data.id_registro'),
+            'id_tipo_registro' => $tipoPrincipal->id_tipo_registro,
+            'puntaje_complejidad' => 3,
+        ]);
+        $this->assertDatabaseHas('registro_ges_tipos', [
+            'id_registro' => $response->json('data.id_registro'),
+            'id_tipo_registro' => $tipoSecundario->id_tipo_registro,
+            'puntaje_complejidad' => 4,
+        ]);
+        $this->assertDatabaseHas('hitos', [
+            'id_registro' => $response->json('data.id_registro'),
+            'nombre' => $tipoPrincipal->nombre.' + SIC',
+        ]);
+
+        $adminRole = $this->createRoleWithDefaultPermissions('Administrador');
+        $admin = User::create([
+            'nombre' => 'Admin',
+            'apellido' => 'Test',
+            'username' => 'admin.types.test',
+            'password' => bcrypt('secret123'),
+            'id_rol' => $adminRole->id_rol,
+            'activo' => true,
+        ]);
+        $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/complejidad/patologias')
+            ->assertOk()
+            ->assertJsonPath('data.0.promedio', 7);
+
+        $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/dashboard/distribuciones')
+            ->assertOk()
+            ->assertJsonFragment(['label' => 'SIC', 'total' => 1]);
+
+        $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/dashboard/complejidad-promedio')
+            ->assertOk()
+            ->assertJsonPath('promedio', 3.5);
+
+        $this->actingAs($user, 'sanctum')
+            ->putJson('/api/registros-ges/'.$response->json('data.id_registro'), [
+                'id_paciente' => $paciente->id_paciente,
+                'id_patologia' => Patologia::first()->id_patologia,
+                'id_prioridad' => Prioridad::first()->id_prioridad,
+                'id_tipo_registro' => $tipoPrincipal->id_tipo_registro,
+                'tipos_registro' => [$tipoPrincipal->id_tipo_registro, $tipoSecundario->id_tipo_registro],
+                'estado' => 'Pendiente',
+            ])
+            ->assertOk()
+            ->assertJsonCount(2, 'data.tipos_registro')
+            ->assertJsonPath('data.complejidad_total', 7);
+    }
+
     public function test_can_update_registro_ges_and_clear_optional_fields(): void
     {
         $user = $this->createUserWithAccess();

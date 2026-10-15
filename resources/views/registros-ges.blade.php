@@ -122,20 +122,31 @@
 
     @include('partials.ges-select-filter')
 
+    const prioridadEstilos = {
+        1: { color: '#dc3545', fondo: '#f8d7da', texto: 'text-white' },
+        2: { color: '#fd7e14', fondo: '#ffe5d0', texto: 'text-dark' },
+        3: { color: '#ffc107', fondo: '#fff3cd', texto: 'text-dark' },
+        4: { color: '#0d6efd', fondo: '#cfe2ff', texto: 'text-white' },
+    };
+
     function renderRegistros(registros) {
-        const registrosPermitidos = registros || [];
+        const registrosPermitidos = [...(registros || [])].sort((a, b) => (a.prioridad?.nivel ?? 99) - (b.prioridad?.nivel ?? 99) || a.id_registro - b.id_registro);
 
         if (!registrosPermitidos.length) {
             registrosList.innerHTML = '<tr><td colspan="8">No hay registros GES disponibles para tu perfil.</td></tr>';
             return;
         }
 
-        registrosList.innerHTML = registrosPermitidos.map((registro) => `
-            <tr>
-                <td>${escapeHtml(registro.id_registro)}</td>
+        registrosList.innerHTML = registrosPermitidos.map((registro) => {
+            const estilo = prioridadEstilos[registro.prioridad?.nivel];
+            const filaEstilo = estilo ? ` style="--bs-table-bg: ${estilo.fondo}; --bs-table-striped-bg: ${estilo.fondo}; --bs-table-hover-bg: ${estilo.fondo}; box-shadow: inset 6px 0 0 ${estilo.color};"` : '';
+            const prioridadBadge = estilo ? `<div><span class="badge ${estilo.texto}" style="background-color: ${estilo.color};">${escapeHtml(registro.prioridad.nombre)}</span></div>` : '';
+            return `
+            <tr${filaEstilo}>
+                <td>${escapeHtml(registro.id_registro)}${prioridadBadge}</td>
                 <td>${escapeHtml(registro.paciente ? `${registro.paciente.nombre} ${registro.paciente.apellido_paterno}` : `ID ${registro.id_paciente}`)}</td>
                 <td>${escapeHtml(registro.patologia ? `${registro.patologia.numero_ges} - ${registro.patologia.nombre}` : `ID ${registro.id_patologia}`)}${registro.patologias_asociadas?.length ? `<div class="small text-muted">${registro.patologias_asociadas.length} asociada(s)</div>` : ''}</td>
-                <td>${escapeHtml(registro.tipo_registro?.nombre || `ID ${registro.id_tipo_registro}`)}</td>
+                <td>${escapeHtml(registro.tipos_registro?.length ? registro.tipos_registro.map((tipo) => tipo.nombre).join(' + ') : registro.tipo_registro?.nombre || `ID ${registro.id_tipo_registro}`)}${registro.complejidad_total !== null && registro.complejidad_total !== undefined ? `<div class="small text-muted">Complejidad: ${Number(registro.complejidad_total).toFixed(2)} puntos</div>` : ''}</td>
                 <td><span class="badge text-bg-light">${escapeHtml(registro.estado || 'Pendiente')}</span></td>
                 <td>${escapeHtml(registro.fecha_ingreso || '-')}</td>
                 <td>${escapeHtml((registro.documentos && registro.documentos.length) || 0)}</td>
@@ -146,7 +157,8 @@
                     </div>
                 </td>
             </tr>
-        `).join('');
+        `;
+        }).join('');
     }
 
     async function loadRegistros() {
@@ -226,6 +238,7 @@
                           <dl class="row mb-4">
                             <dt class="col-sm-3">Paciente</dt><dd class="col-sm-9">${escapeHtml(registro.paciente ? `${registro.paciente.nombre} ${registro.paciente.apellido_paterno}` : `ID ${registro.id_paciente}`)}</dd>
                             <dt class="col-sm-3">Patología</dt><dd class="col-sm-9">${escapeHtml(registro.patologia ? `${registro.patologia.numero_ges} - ${registro.patologia.nombre}` : `ID ${registro.id_patologia}`)}</dd>
+                            <dt class="col-sm-3">Tipo(s) de registro</dt><dd class="col-sm-9">${escapeHtml(registro.tipos_registro?.length ? registro.tipos_registro.map((tipo) => tipo.nombre).join(' + ') : registro.tipo_registro?.nombre || `ID ${registro.id_tipo_registro}`)}${registro.complejidad_total !== null && registro.complejidad_total !== undefined ? ` · Complejidad estimada: ${Number(registro.complejidad_total).toFixed(2)} puntos` : ''}</dd>
                             <dt class="col-sm-3">Estado</dt><dd class="col-sm-9">${escapeHtml(registro.estado || 'Pendiente')}</dd>
                             <dt class="col-sm-3">Fecha ingreso</dt><dd class="col-sm-9">${escapeHtml(registro.fecha_ingreso || '-')}</dd>
                             <dt class="col-sm-3">Fecha límite</dt><dd class="col-sm-9">${escapeHtml(registro.fecha_limite || '-')}</dd>
@@ -291,8 +304,10 @@
                             <select class="form-select" id="edit_id_prioridad" name="id_prioridad" required></select>
                           </div>
                           <div class="col-md-4">
-                            <label class="form-label" for="edit_id_tipo_registro">Tipo de registro</label>
-                            <select class="form-select" id="edit_id_tipo_registro" name="id_tipo_registro" required></select>
+                            <label class="form-label" for="edit_tipos_registro_selector">Tipo(s) de registro</label>
+                            <input type="hidden" id="edit_id_tipo_registro" name="id_tipo_registro">
+                            <div id="edit_tipos_registro_selector" class="row row-cols-1 g-2"></div>
+                            <div id="edit_tipos_registro_resumen" class="form-text mt-2"></div>
                           </div>
                           <div class="col-md-4">
                             <label class="form-label" for="edit_tipo_tratamiento">Tipo de tratamiento</label>
@@ -362,6 +377,8 @@
 
             const catalog = await apiRequest('{{ url('/api/registros-ges/catalogos') }}');
             const patologiasCatalogo = catalog.patologias?.data || catalog.patologias || [];
+            const tiposRegistroCatalogo = catalog.tipos_registro?.data || catalog.tipos_registro || [];
+            const complejidadPorTipo = catalog.complejidad_tipos || {};
             const populateEditSelect = (selectId, items, selectedId) => {
                 const select = document.getElementById(selectId);
                 select.innerHTML = items.map((item) => `<option value="${item.id_paciente ?? item.id_patologia ?? item.id_prioridad ?? item.id_tipo_registro}" ${selectedId === (item.id_paciente ?? item.id_patologia ?? item.id_prioridad ?? item.id_tipo_registro) ? 'selected' : ''}>${escapeHtml(item.nombre ? `${item.nombre} ${item.apellido_paterno || ''}`.trim() : `${item.numero_ges ? `${item.numero_ges} - ` : ''}${item.nombre || ''}`)}</option>`).join('');
@@ -370,8 +387,15 @@
             populateEditSelect('edit_id_paciente', catalog.pacientes?.data || catalog.pacientes || [], registro.id_paciente);
             attachSelectFilter(document.getElementById('edit_id_paciente'), 'Buscar paciente por nombre o RUT...');
             populateEditSelect('edit_id_patologia', catalog.patologias?.data || catalog.patologias || [], registro.id_patologia);
+            attachSelectFilter(document.getElementById('edit_id_patologia'), 'Buscar patología por nombre...');
             populateEditSelect('edit_id_prioridad', catalog.prioridades?.data || catalog.prioridades || [], registro.id_prioridad);
-            populateEditSelect('edit_id_tipo_registro', catalog.tipos_registro?.data || catalog.tipos_registro || [], registro.id_tipo_registro);
+            const typeSelector = document.getElementById('edit_tipos_registro_selector');
+            const typeInput = document.getElementById('edit_id_tipo_registro');
+            const typeSummary = document.getElementById('edit_tipos_registro_resumen');
+            const selectedTypes = registro.tipos_registro?.map((tipo) => tipo.id_tipo_registro) || [registro.id_tipo_registro];
+            renderRecordTypeOptions(typeSelector, tiposRegistroCatalogo, selectedTypes, complejidadPorTipo);
+            updateRecordTypeSummary(typeSelector, typeInput, typeSummary, complejidadPorTipo);
+            typeSelector.addEventListener('change', () => updateRecordTypeSummary(typeSelector, typeInput, typeSummary, complejidadPorTipo));
             if (registro.puede_editar) {
                 const asociacionSelect = document.getElementById('asociacion-patologia');
                 asociacionSelect.innerHTML += patologiasCatalogo
@@ -464,6 +488,7 @@
                 const form = submitEvent.target;
                 const formData = new FormData(form);
                 const file = formData.get('documento');
+                const editError = document.getElementById('edit-registro-error');
                 const payload = Object.fromEntries([
                     'id_paciente',
                     'id_patologia',
@@ -475,11 +500,18 @@
                     'fecha_limite',
                     'observaciones',
                 ].map((key) => [key, formData.get(key)]));
+                payload.tipos_registro = selectedRecordTypeIds(document.getElementById('edit_tipos_registro_selector'));
+                if (!payload.tipos_registro.length) {
+                    editError.textContent = 'Selecciona al menos un tipo de registro.';
+                    editError.classList.remove('d-none');
+                    return;
+                }
+                payload.id_tipo_registro = payload.tipos_registro[0];
+                payload.tipos_registro = payload.tipos_registro.map(Number);
                 ['id_paciente', 'id_patologia', 'id_prioridad', 'id_tipo_registro'].forEach((key) => {
                     payload[key] = Number(payload[key]);
                 });
                 const submitButton = form.querySelector('button[type="submit"]');
-                const editError = document.getElementById('edit-registro-error');
                 editError.textContent = '';
                 editError.classList.add('d-none');
                 submitButton.disabled = true;
@@ -522,6 +554,15 @@
     async function initializeRegistros() {
         try {
             await loadRegistros();
+            const registroNotificado = new URLSearchParams(window.location.search).get('registro');
+            if (registroNotificado) {
+                const botonVer = document.querySelector(`#registros-list button[data-action="view"][data-id="${CSS.escape(registroNotificado)}"]`);
+                if (botonVer) {
+                    botonVer.click();
+                } else {
+                    showMessage('No se encontró el registro de la notificación entre tus registros.', 'warning');
+                }
+            }
         } catch (error) {
             showMessage(error.message, 'danger');
         }

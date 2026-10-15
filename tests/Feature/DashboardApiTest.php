@@ -211,7 +211,7 @@ class DashboardApiTest extends TestCase
             ->getJson('/api/dashboard/distribuciones')
             ->assertOk()
             ->assertJsonFragment(['label' => 'Urgente'])
-            ->assertJsonFragment(['label' => 'Patología A']);
+            ->assertJsonFragment(['label' => 'Patología N°101']);
 
         $this->actingAs($admin, 'sanctum')
             ->getJson('/api/dashboard/resumen?mes=2026-08')

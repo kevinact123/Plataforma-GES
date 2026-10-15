@@ -71,6 +71,9 @@ class RegistroGesService
         if (Schema::hasTable('registro_ges_patologias')) {
             $with[] = 'asociacionesPatologia.patologia';
         }
+        if (Schema::hasTable('registro_ges_tipos')) {
+            $with[] = 'tiposRegistro';
+        }
 
         return RegistroGes::query()
             ->visibleTo($user)

@@ -116,6 +116,13 @@ La complejidad es una métrica de carga laboral de digitadoras; no reemplaza ni
 modifica la prioridad médica del registro GES. Los endpoints requieren
 autenticación Sanctum y responden con el formato `{ "data": [...] }`.
 
+Un registro GES puede incluir varios tipos de registro. La complejidad estimada
+del registro suma el promedio de las evaluaciones existentes para cada tipo
+seleccionado; el detalle queda guardado como referencia al crear o editar el
+registro. Esta capacidad requiere aplicar la migración
+`2026_10_16_000001_create_registro_ges_tipos_table.php` después de respaldar y
+verificar la base de datos existente.
+
 | Método | Endpoint | Descripción |
 | --- | --- | --- |
 | GET | `/api/complejidad` | Consulta las evaluaciones registradas. |

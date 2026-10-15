@@ -60,21 +60,31 @@ class DashboardService
 
         $patologias = $this->registrosVisibles($user, $mes)
             ->join('patologias', 'patologias.id_patologia', '=', 'registros_ges.id_patologia')
-            ->select('patologias.nombre as label', DB::raw('COUNT(*) as total'))
-            ->groupBy('patologias.id_patologia', 'patologias.nombre')
+            ->select('patologias.numero_ges as label', DB::raw('COUNT(*) as total'))
+            ->groupBy('patologias.id_patologia', 'patologias.numero_ges')
             ->orderByDesc('total')
             ->get()
-            ->map(fn ($row) => ['label' => $row->label, 'total' => (int) $row->total])
+            ->map(fn ($row) => ['label' => 'Patología N°'.$row->label, 'total' => (int) $row->total])
             ->all();
 
-        $tipos = $this->registrosVisibles($user, $mes)
-            ->join('tipos_registro', 'tipos_registro.id_tipo_registro', '=', 'registros_ges.id_tipo_registro')
-            ->select('tipos_registro.nombre as label', DB::raw('COUNT(*) as total'))
-            ->groupBy('tipos_registro.id_tipo_registro', 'tipos_registro.nombre')
-            ->orderByDesc('total')
-            ->get()
-            ->map(fn ($row) => ['label' => $row->label, 'total' => (int) $row->total])
-            ->all();
+        $tipos = Schema::hasTable('registro_ges_tipos')
+            ? DB::table('registro_ges_tipos as rgt')
+                ->join('tipos_registro as tr', 'tr.id_tipo_registro', '=', 'rgt.id_tipo_registro')
+                ->whereIn('rgt.id_registro', $this->registrosVisibles($user, $mes)->select('registros_ges.id_registro'))
+                ->select('tr.nombre as label', DB::raw('COUNT(DISTINCT rgt.id_registro) as total'))
+                ->groupBy('tr.id_tipo_registro', 'tr.nombre')
+                ->orderByDesc('total')
+                ->get()
+                ->map(fn ($row) => ['label' => $row->label, 'total' => (int) $row->total])
+                ->all()
+            : $this->registrosVisibles($user, $mes)
+                ->join('tipos_registro', 'tipos_registro.id_tipo_registro', '=', 'registros_ges.id_tipo_registro')
+                ->select('tipos_registro.nombre as label', DB::raw('COUNT(*) as total'))
+                ->groupBy('tipos_registro.id_tipo_registro', 'tipos_registro.nombre')
+                ->orderByDesc('total')
+                ->get()
+                ->map(fn ($row) => ['label' => $row->label, 'total' => (int) $row->total])
+                ->all();
 
         return [
             'prioridades' => $prioridades,
@@ -159,6 +169,16 @@ class DashboardService
             ->distinct()
             ->pluck('id_tipo_registro')
             ->all();
+        if (Schema::hasTable('registro_ges_tipos')) {
+            $tiposVisibles = array_values(array_unique(array_merge(
+                $tiposVisibles,
+                DB::table('registro_ges_tipos')
+                    ->whereIn('id_registro', $this->registrosVisibles($user)->select('registros_ges.id_registro'))
+                    ->distinct()
+                    ->pluck('id_tipo_registro')
+                    ->all(),
+            )));
+        }
 
         if (empty($tiposVisibles)) {
             return ['promedio' => 0.0];

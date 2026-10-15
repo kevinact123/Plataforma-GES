@@ -105,12 +105,13 @@
         }
         list.innerHTML = payload.data.map(n => {
             const items = (n.registros || []).slice(0, 5).map(r =>
-                `<li>#${esc(r.id_registro)}${r.paciente ? ' · ' + esc(r.paciente) : ''}${r.patologia ? ' · ' + esc(r.patologia) : ''}</li>`).join('');
+                `<li><a class="text-reset" href="/registros-ges?registro=${encodeURIComponent(r.id_registro)}" data-registro-link="${esc(r.id_registro)}">#${esc(r.id_registro)}${r.paciente ? ' · ' + esc(r.paciente) : ''}${r.patologia ? ' · ' + esc(r.patologia) : ''}</a></li>`).join('');
             const extra = (n.registros || []).length > 5 ? `<li>... y ${n.registros.length - 5} más</li>` : '';
-            return `<a href="/registros-ges" class="dropdown-item text-wrap border-bottom py-2 ${n.leida ? '' : 'bg-primary-subtle'}" data-notif="${esc(n.id)}">
+            const destino = (n.registros || []).length ? `/registros-ges?registro=${encodeURIComponent(n.registros[0].id_registro)}` : '/registros-ges';
+            return `<div role="link" tabindex="0" class="dropdown-item text-wrap border-bottom py-2 ${n.leida ? '' : 'bg-primary-subtle'}" data-notif="${esc(n.id)}" data-href="${destino}" style="cursor:pointer;">
                 <div class="fw-semibold small">${esc(n.titulo)}</div>
                 <ul class="small mb-1 ps-3">${items}${extra}</ul>
-                <div class="text-muted" style="font-size:.7rem;">${n.fecha ? new Date(n.fecha).toLocaleString() : ''}</div></a>`;
+                <div class="text-muted" style="font-size:.7rem;">${n.fecha ? new Date(n.fecha).toLocaleString() : ''}</div></div>`;
         }).join('');
     }
 
@@ -119,9 +120,16 @@
         if (payload) render(payload);
     }
 
-    list.addEventListener('click', (e) => {
+    list.addEventListener('click', async (e) => {
         const item = e.target.closest('[data-notif]');
-        if (item) call('/notificaciones/' + item.dataset.notif + '/leer', 'POST');
+        if (!item) return;
+        const enlace = e.target.closest('[data-registro-link]');
+        e.preventDefault();
+        await call('/notificaciones/' + item.dataset.notif + '/leer', 'POST');
+        window.location.href = enlace ? enlace.getAttribute('href') : item.dataset.href;
+    });
+    list.addEventListener('keydown', (e) => {
+        if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[data-notif]')) { e.preventDefault(); e.target.click(); }
     });
     readAll.addEventListener('click', async () => { await call('/notificaciones/leer-todas', 'POST'); refresh(); });
 

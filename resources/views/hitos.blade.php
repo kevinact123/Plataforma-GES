@@ -16,10 +16,10 @@
 <div id="hitos-loading" class="alert alert-info" role="status">Cargando hitos...</div>
 
 <section class="row g-3 mb-4" aria-label="Resumen de hitos">
-    <div class="col-6 col-lg-3"><div class="card shadow-sm border-start border-4 border-warning h-100"><div class="card-body"><div class="small text-muted">Pendientes</div><strong class="display-6 text-warning" id="pending-count">-</strong></div></div></div>
-    <div class="col-6 col-lg-3"><div class="card shadow-sm border-start border-4 border-info h-100"><div class="card-body"><div class="small text-muted">En proceso</div><strong class="display-6 text-info" id="process-count">-</strong></div></div></div>
-    <div class="col-6 col-lg-3"><div class="card shadow-sm border-start border-4 border-success h-100"><div class="card-body"><div class="small text-muted">Completados</div><strong class="display-6 text-success" id="complete-count">-</strong></div></div></div>
-    <div class="col-6 col-lg-3"><div class="card shadow-sm border-start border-4 border-primary h-100"><div class="card-body"><div class="small text-muted">Registros con hitos</div><strong class="display-6 text-primary" id="record-count">-</strong></div></div></div>
+    <div class="col-6 col-lg-3"><div class="card shadow-sm border-start border-4 border-warning h-100" role="button" tabindex="0" data-hito-card-filter="pendiente" style="cursor:pointer;"><div class="card-body"><div class="small text-muted">Pendientes</div><strong class="display-6 text-warning" id="pending-count">-</strong></div></div></div>
+    <div class="col-6 col-lg-3"><div class="card shadow-sm border-start border-4 border-info h-100" role="button" tabindex="0" data-hito-card-filter="en_proceso" style="cursor:pointer;"><div class="card-body"><div class="small text-muted">En proceso</div><strong class="display-6 text-info" id="process-count">-</strong></div></div></div>
+    <div class="col-6 col-lg-3"><div class="card shadow-sm border-start border-4 border-success h-100" role="button" tabindex="0" data-hito-card-filter="completado" style="cursor:pointer;"><div class="card-body"><div class="small text-muted">Completados</div><strong class="display-6 text-success" id="complete-count">-</strong></div></div></div>
+    <div class="col-6 col-lg-3"><div class="card shadow-sm border-start border-4 border-primary h-100" role="button" tabindex="0" data-hito-card-filter="todos" style="cursor:pointer;"><div class="card-body"><div class="small text-muted">Registros con hitos</div><strong class="display-6 text-primary" id="record-count">-</strong></div></div></div>
 </section>
 
 <section class="card shadow-sm mb-4" aria-labelledby="new-hito-title">
@@ -100,7 +100,7 @@
             const patient = record.paciente ? `${record.paciente.nombre} ${record.paciente.apellido_paterno}` : `ID ${record.id_paciente}`;
             const pendientes = record.hitos.filter((hito) => hito.estado !== 'completado');
             const pendientesTexto = pendientes.length
-                ? `<div class="small text-warning mt-1"><i class="bi bi-exclamation-circle me-1" aria-hidden="true"></i>Faltan: ${pendientes.map((hito) => escapeHtml(hito.nombre)).join(', ')}</div>`
+                ? `<div class="small text-warning mt-1"><i class="bi bi-exclamation-circle me-1" aria-hidden="true"></i>Pendiente: ${pendientes.map((hito) => escapeHtml(hito.nombre)).join(', ')}</div>`
                 : '<div class="small text-success mt-1"><i class="bi bi-check-circle me-1" aria-hidden="true"></i>Todos completados</div>';
             const eliminarBoton = record.puede_eliminar ? `<button class="btn btn-sm btn-outline-danger ms-1" type="button" data-record-delete="${record.id_registro}"><i class="bi bi-trash me-1" aria-hidden="true"></i>Eliminar</button>` : '';
             return `<tr><td class="fw-semibold">#${record.id_registro}</td><td>${escapeHtml(patient)}</td><td>${escapeHtml(record.patologia?.nombre)}</td><td><span class="badge text-bg-primary">${record.hitos.length}</span>${pendientesTexto}</td><td class="text-end"><button class="btn btn-sm btn-outline-primary" type="button" data-record-id="${record.id_registro}"><i class="bi bi-eye me-1" aria-hidden="true"></i>Ver y gestionar</button>${eliminarBoton}</td></tr>`;

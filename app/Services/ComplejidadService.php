@@ -7,7 +7,6 @@ use App\Models\ComplejidadRegistro;
 use App\Models\RegistroGes;
 use App\Models\TipoRegistro;
 use App\Models\User;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -142,19 +141,40 @@ class ComplejidadService
 
     public function porPatologia(User $user): array
     {
-        $rows = DB::table('registros_ges as rg')
-            ->when($user->hasRole('digitadora'), fn ($query) => $query->whereIn('rg.id_registro', RegistroGes::query()->visibleTo($user)->select('id_registro')))
-            ->join('patologias as p', 'p.id_patologia', '=', 'rg.id_patologia')
-            ->join('complejidad_registro as cr', 'cr.id_tipo_registro', '=', 'rg.id_tipo_registro')
-            ->select(
-                'p.id_patologia',
-                'p.nombre',
-                DB::raw('AVG(cr.puntaje) as promedio'),
-                DB::raw('COUNT(DISTINCT rg.id_registro) as total_registros'),
-            )
-            ->groupBy('p.id_patologia', 'p.nombre')
-            ->orderByDesc('promedio')
-            ->get();
+        if (Schema::hasTable('registro_ges_tipos')) {
+            $puntajesRegistro = DB::table('registro_ges_tipos')
+                ->select('id_registro')
+                ->selectRaw('SUM(puntaje_complejidad) as puntaje_total')
+                ->groupBy('id_registro')
+                ->havingRaw('COUNT(puntaje_complejidad) = COUNT(*)');
+            $rows = DB::table('registros_ges as rg')
+                ->when($user->hasRole('digitadora'), fn ($query) => $query->whereIn('rg.id_registro', RegistroGes::query()->visibleTo($user)->select('id_registro')))
+                ->join('patologias as p', 'p.id_patologia', '=', 'rg.id_patologia')
+                ->joinSub($puntajesRegistro, 'pr', 'pr.id_registro', '=', 'rg.id_registro')
+                ->select(
+                    'p.id_patologia',
+                    'p.nombre',
+                    DB::raw('AVG(pr.puntaje_total) as promedio'),
+                    DB::raw('COUNT(DISTINCT rg.id_registro) as total_registros'),
+                )
+                ->groupBy('p.id_patologia', 'p.nombre')
+                ->orderByDesc('promedio')
+                ->get();
+        } else {
+            $rows = DB::table('registros_ges as rg')
+                ->when($user->hasRole('digitadora'), fn ($query) => $query->whereIn('rg.id_registro', RegistroGes::query()->visibleTo($user)->select('id_registro')))
+                ->join('patologias as p', 'p.id_patologia', '=', 'rg.id_patologia')
+                ->join('complejidad_registro as cr', 'cr.id_tipo_registro', '=', 'rg.id_tipo_registro')
+                ->select(
+                    'p.id_patologia',
+                    'p.nombre',
+                    DB::raw('AVG(cr.puntaje) as promedio'),
+                    DB::raw('COUNT(DISTINCT rg.id_registro) as total_registros'),
+                )
+                ->groupBy('p.id_patologia', 'p.nombre')
+                ->orderByDesc('promedio')
+                ->get();
+        }
 
         return [
             'data' => $rows->map(function ($row): array {
@@ -168,8 +188,21 @@ class ComplejidadService
         ];
     }
 
-    private function tiposVisibles(User $user): Builder
+    private function tiposVisibles(User $user): array
     {
-        return RegistroGes::query()->visibleTo($user)->select('id_tipo_registro')->distinct();
+        $registroVisible = RegistroGes::query()->visibleTo($user);
+        $tipos = $registroVisible->distinct()->pluck('id_tipo_registro')->all();
+        if (Schema::hasTable('registro_ges_tipos')) {
+            $tipos = array_merge(
+                $tipos,
+                DB::table('registro_ges_tipos')
+                    ->whereIn('id_registro', RegistroGes::query()->visibleTo($user)->select('id_registro'))
+                    ->distinct()
+                    ->pluck('id_tipo_registro')
+                    ->all(),
+            );
+        }
+
+        return array_values(array_unique($tipos));
     }
 }

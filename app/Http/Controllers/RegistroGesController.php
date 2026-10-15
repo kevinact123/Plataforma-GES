@@ -12,6 +12,7 @@ use App\Http\Resources\PrioridadResource;
 use App\Http\Resources\RegistroGesPatologiaResource;
 use App\Http\Resources\RegistroGesResource;
 use App\Http\Resources\TipoRegistroResource;
+use App\Models\ComplejidadRegistro;
 use App\Models\Paciente;
 use App\Models\Patologia;
 use App\Models\Prioridad;
@@ -40,6 +41,14 @@ class RegistroGesController extends Controller
     public function catalogos(Request $request): JsonResponse
     {
         $user = $request->user();
+        $tiposRegistro = TipoRegistro::query()->where('activo', true)->orderBy('nombre')->get();
+        $puntajesComplejidad = Schema::hasTable('complejidad_registro')
+            ? ComplejidadRegistro::query()
+                ->select('id_tipo_registro')
+                ->selectRaw('AVG(puntaje) as puntaje_complejidad')
+                ->groupBy('id_tipo_registro')
+                ->pluck('puntaje_complejidad', 'id_tipo_registro')
+            : collect();
 
         return response()->json([
             'pacientes' => PacienteResource::collection(
@@ -61,7 +70,8 @@ class RegistroGesController extends Controller
                     ->get(),
             ),
             'prioridades' => PrioridadResource::collection(Prioridad::query()->orderBy('nivel')->get()),
-            'tipos_registro' => TipoRegistroResource::collection(TipoRegistro::query()->where('activo', true)->orderBy('nombre')->get()),
+            'tipos_registro' => TipoRegistroResource::collection($tiposRegistro),
+            'complejidad_tipos' => $puntajesComplejidad->map(fn ($puntaje): float => round((float) $puntaje, 2)),
         ]);
     }
 
@@ -76,6 +86,9 @@ class RegistroGesController extends Controller
         }
 
         $relations = ['paciente', 'patologia', 'prioridad', 'tipoRegistro', 'documentos', 'documentosGenerales'];
+        if (Schema::hasTable('registro_ges_tipos')) {
+            $relations[] = 'tiposRegistro';
+        }
         if (Schema::hasTable('registro_ges_patologias')) {
             $relations[] = 'asociacionesPatologia.patologia';
         }
@@ -86,6 +99,14 @@ class RegistroGesController extends Controller
     public function store(StoreRegistroGesRequest $request): JsonResponse
     {
         $validated = $request->validated();
+        $tiposRegistro = array_values(array_map(
+            'intval',
+            $validated['tipos_registro'] ?? [$validated['id_tipo_registro']],
+        ));
+        if (count($tiposRegistro) > 1 && ! Schema::hasTable('registro_ges_tipos')) {
+            return response()->json(['message' => 'La selección de varios tipos requiere aplicar la migración registro_ges_tipos.'], 409);
+        }
+        $validated['id_tipo_registro'] = $tiposRegistro[0];
 
         $patologia = Patologia::findOrFail($validated['id_patologia']);
         if (! $request->user()->puedeEditarPatologia($patologia)) {
@@ -102,9 +123,13 @@ class RegistroGesController extends Controller
         $asociadas = $validated['patologias_asociadas'] ?? [];
         $tipoAsociacion = $validated['tipo_asociacion'] ?? 'complicacion';
         $observacionAsociacion = $validated['observacion_asociacion'] ?? null;
-        $nombreHito = TipoRegistro::query()->findOrFail($validated['id_tipo_registro'])->nombre;
+        $tipos = TipoRegistro::query()->whereIn('id_tipo_registro', $tiposRegistro)->get()->keyBy('id_tipo_registro');
+        $nombreHito = collect($tiposRegistro)
+            ->map(fn (int $idTipo): string => $tipos->get($idTipo)->nombre)
+            ->implode(' + ');
+        $puntajesComplejidad = $this->puntajesComplejidad($tiposRegistro);
         $usuarioActual = $request->user();
-        unset($validated['patologias_asociadas'], $validated['tipo_asociacion'], $validated['observacion_asociacion']);
+        unset($validated['tipos_registro'], $validated['patologias_asociadas'], $validated['tipo_asociacion'], $validated['observacion_asociacion']);
 
         if ($asociadas && ! Schema::hasTable('registro_ges_patologias')) {
             return response()->json(['message' => 'Las patologías asociadas no están habilitadas.'], 409);
@@ -120,8 +145,14 @@ class RegistroGesController extends Controller
             }
         }
 
-        $registro = DB::transaction(function () use ($validated, $asociadas, $tipoAsociacion, $observacionAsociacion, $nombreHito, $usuarioActual): RegistroGes {
+        $registro = DB::transaction(function () use ($validated, $tiposRegistro, $puntajesComplejidad, $asociadas, $tipoAsociacion, $observacionAsociacion, $nombreHito, $usuarioActual): RegistroGes {
             $registro = RegistroGes::create($validated);
+
+            if (Schema::hasTable('registro_ges_tipos')) {
+                $registro->tiposRegistro()->attach(collect($tiposRegistro)->mapWithKeys(fn (int $idTipo): array => [
+                    $idTipo => ['puntaje_complejidad' => $puntajesComplejidad[$idTipo] ?? null],
+                ])->all());
+            }
 
             app(HitoService::class)->crear($usuarioActual, $registro->id_registro, [
                 'nombre' => $nombreHito,
@@ -141,6 +172,9 @@ class RegistroGesController extends Controller
         });
 
         $relations = ['paciente', 'patologia', 'prioridad', 'tipoRegistro'];
+        if (Schema::hasTable('registro_ges_tipos')) {
+            $relations[] = 'tiposRegistro';
+        }
         if (Schema::hasTable('registro_ges_patologias')) {
             $relations[] = 'asociacionesPatologia.patologia';
         }
@@ -160,6 +194,17 @@ class RegistroGesController extends Controller
         }
 
         $validated = $request->validated();
+        $actualizarTipos = isset($validated['tipos_registro']) || isset($validated['id_tipo_registro']);
+        $tiposRegistro = array_values(array_map(
+            'intval',
+            $validated['tipos_registro'] ?? [$validated['id_tipo_registro'] ?? $registro->id_tipo_registro],
+        ));
+        if (count($tiposRegistro) > 1 && ! Schema::hasTable('registro_ges_tipos')) {
+            return response()->json(['message' => 'La selección de varios tipos requiere aplicar la migración registro_ges_tipos.'], 409);
+        }
+        if (isset($validated['tipos_registro'])) {
+            $validated['id_tipo_registro'] = $tiposRegistro[0];
+        }
         if (isset($validated['id_paciente'])
             && ! Paciente::query()->whereKey($validated['id_paciente'])->where('activo', true)->exists()) {
             return response()->json(['message' => 'El paciente debe estar activo para asociarlo al registro GES.'], 422);
@@ -177,10 +222,23 @@ class RegistroGesController extends Controller
             }
         }
 
-        $registro->fill($validated);
-        $registro->save();
+        unset($validated['tipos_registro']);
+        DB::transaction(function () use ($registro, $validated, $actualizarTipos, $tiposRegistro): void {
+            $registro->fill($validated);
+            $registro->save();
+
+            if ($actualizarTipos && Schema::hasTable('registro_ges_tipos')) {
+                $puntajesComplejidad = $this->puntajesComplejidad($tiposRegistro);
+                $registro->tiposRegistro()->sync(collect($tiposRegistro)->mapWithKeys(fn (int $idTipo): array => [
+                    $idTipo => ['puntaje_complejidad' => $puntajesComplejidad[$idTipo] ?? null],
+                ])->all());
+            }
+        });
 
         $relations = ['paciente', 'patologia', 'prioridad', 'tipoRegistro', 'documentos'];
+        if (Schema::hasTable('registro_ges_tipos')) {
+            $relations[] = 'tiposRegistro';
+        }
         if (Schema::hasTable('registro_ges_patologias')) {
             $relations[] = 'asociacionesPatologia.patologia';
         }
@@ -189,6 +247,28 @@ class RegistroGesController extends Controller
             'data' => new RegistroGesResource($registro->fresh($relations)),
             'message' => 'Registro GES actualizado correctamente.',
         ]);
+    }
+
+    /**
+     * @param  array<int, int>  $tiposRegistro
+     * @return array<int, float>
+     */
+    private function puntajesComplejidad(array $tiposRegistro): array
+    {
+        if (! Schema::hasTable('complejidad_registro')) {
+            return [];
+        }
+
+        return ComplejidadRegistro::query()
+            ->whereIn('id_tipo_registro', $tiposRegistro)
+            ->select('id_tipo_registro')
+            ->selectRaw('AVG(puntaje) as puntaje_complejidad')
+            ->groupBy('id_tipo_registro')
+            ->get()
+            ->mapWithKeys(fn (ComplejidadRegistro $puntaje): array => [
+                $puntaje->id_tipo_registro => round((float) $puntaje->puntaje_complejidad, 2),
+            ])
+            ->all();
     }
 
     public function destroy(Request $request, RegistroGes $registro): JsonResponse

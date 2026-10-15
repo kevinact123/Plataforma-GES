@@ -42,6 +42,26 @@ class RegistroGesResource extends JsonResource
             ),
             'prioridad' => new PrioridadResource($this->whenLoaded('prioridad')),
             'tipo_registro' => new TipoRegistroResource($this->whenLoaded('tipoRegistro')),
+            'tipos_registro' => $this->when(
+                $this->relationLoaded('tiposRegistro'),
+                fn () => $this->tiposRegistro->map(fn ($tipo): array => [
+                    'id_tipo_registro' => $tipo->id_tipo_registro,
+                    'nombre' => $tipo->nombre,
+                    'puntaje_complejidad' => $tipo->pivot->puntaje_complejidad === null
+                        ? null
+                        : (float) $tipo->pivot->puntaje_complejidad,
+                ])->values(),
+            ),
+            'complejidad_total' => $this->when(
+                $this->relationLoaded('tiposRegistro'),
+                function (): ?float {
+                    if ($this->tiposRegistro->isEmpty() || $this->tiposRegistro->contains(fn ($tipo): bool => $tipo->pivot->puntaje_complejidad === null)) {
+                        return null;
+                    }
+
+                    return round((float) $this->tiposRegistro->sum(fn ($tipo): float => (float) $tipo->pivot->puntaje_complejidad), 2);
+                },
+            ),
             'asignaciones' => AsignacionResource::collection($this->whenLoaded('asignaciones')),
             'documentos' => RegistroGesDocumentoResource::collection($this->whenLoaded('documentos')),
             'documentos_generales' => $this->whenLoaded('documentosGenerales'),

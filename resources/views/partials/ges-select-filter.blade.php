@@ -10,7 +10,7 @@
         });
     }
 
-    function attachSelectFilter(select, placeholder) {
+    function attachSelectFilter(select, placeholder, searchInput = null) {
         const seen = new Set();
         select._allOptions = Array.from(select.options)
             .map((option) => ({ value: option.value, text: option.textContent }))
@@ -19,7 +19,7 @@
         select.classList.add('d-none');
         let input = select._filterInput;
         if (!input) {
-            input = document.createElement('input');
+            input = searchInput || document.createElement('input');
             input.type = 'search';
             input.className = 'form-control';
             input.placeholder = placeholder;
@@ -30,7 +30,7 @@
             results.className = 'list-group position-absolute w-100 shadow-sm d-none';
             results.style.cssText = 'z-index:1055;max-height:260px;overflow-y:auto;';
             select.parentNode.classList.add('position-relative');
-            select.parentNode.insertBefore(input, select);
+            if (!searchInput) select.parentNode.insertBefore(input, select);
             select.parentNode.insertBefore(results, select);
             select._filterInput = input;
             select._results = results;
@@ -41,6 +41,7 @@
                 input.value = option.text;
                 input.setCustomValidity('');
                 results.classList.add('d-none');
+                select.dispatchEvent(new Event('change', { bubbles: true }));
             };
             const render = () => {
                 const query = input.value.trim();
@@ -54,7 +55,7 @@
             input.addEventListener('input', () => {
                 select.innerHTML = '<option value=""></option>';
                 select.value = '';
-                input.setCustomValidity('Selecciona un paciente de la lista.');
+                input.setCustomValidity('Selecciona una opción de la lista.');
                 render();
             });
             input.addEventListener('focus', () => { if (!select.value) render(); });
@@ -92,4 +93,59 @@
     function fillSelect(id, items, labelBuilder, valueBuilder = null) {
         const select = document.getElementById(id);
         select.innerHTML += items.map((item) => `<option value="${valueBuilder ? valueBuilder(item) : item[id]}">${escapeHtml(labelBuilder(item))}</option>`).join('');
+    }
+
+    function renderRecordTypeOptions(container, types, selectedIds = [], complexityByType = {}) {
+        const selected = new Set(selectedIds.map(Number));
+        const orderedTypes = [
+            ...selectedIds.map((id) => types.find((type) => Number(type.id_tipo_registro) === Number(id))).filter(Boolean),
+            ...types.filter((type) => !selected.has(Number(type.id_tipo_registro))),
+        ];
+
+        container.innerHTML = orderedTypes.map((type) => {
+            const score = complexityByType[type.id_tipo_registro];
+            const scoreLabel = score === undefined || score === null
+                ? 'Falta registrar su puntaje promedio'
+                : `Promedio registrado: ${Number(score).toFixed(2)} puntos`;
+
+            return `<div class="col">
+                <label class="record-type-option d-flex align-items-start gap-2 border rounded p-3 h-100 m-0" for="${container.id}-${type.id_tipo_registro}">
+                    <input class="form-check-input flex-shrink-0 m-0 mt-1" type="checkbox" value="${type.id_tipo_registro}" id="${container.id}-${type.id_tipo_registro}" ${selected.has(Number(type.id_tipo_registro)) ? 'checked' : ''}>
+                    <span class="fw-semibold">${escapeHtml(type.nombre)}<span class="d-block small text-muted fw-normal mt-1">${escapeHtml(scoreLabel)}</span></span>
+                </label>
+            </div>`;
+        }).join('');
+        container.querySelectorAll('.record-type-option').forEach((option) => {
+            const checkbox = option.querySelector('input[type="checkbox"]');
+            option.style.cursor = 'pointer';
+            option.classList.toggle('border-primary', checkbox.checked);
+            option.classList.toggle('bg-primary-subtle', checkbox.checked);
+            checkbox.addEventListener('change', () => {
+                option.classList.toggle('border-primary', checkbox.checked);
+                option.classList.toggle('bg-primary-subtle', checkbox.checked);
+            });
+        });
+    }
+
+    function selectedRecordTypeIds(container) {
+        return Array.from(container.querySelectorAll('input[type="checkbox"]:checked'), (input) => Number(input.value));
+    }
+
+    function updateRecordTypeSummary(container, hiddenInput, summary, complexityByType) {
+        const selectedIds = selectedRecordTypeIds(container);
+        hiddenInput.value = selectedIds[0] || '';
+        if (!selectedIds.length) {
+            summary.textContent = 'Selecciona uno o más tipos de registro.';
+            return selectedIds;
+        }
+
+        const hasMissingScore = selectedIds.some((id) => complexityByType[id] === undefined || complexityByType[id] === null);
+        if (hasMissingScore) {
+            summary.textContent = `${selectedIds.length} tipo(s) seleccionado(s). No se puede calcular el total: falta registrar el puntaje promedio de uno o más tipos en “Registrar complejidad por tipo”.`;
+        } else {
+            const total = selectedIds.reduce((sum, id) => sum + Number(complexityByType[id]), 0);
+            summary.textContent = `${selectedIds.length} tipo(s) seleccionado(s). Complejidad estimada total: ${total.toFixed(2)} puntos (suma de promedios).`;
+        }
+
+        return selectedIds;
     }

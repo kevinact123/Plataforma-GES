@@ -14,7 +14,7 @@ use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
 {
-    /** @use HasFactory<UserFactory> */
+    /** @use HasFactory<UserFactory> */          
     use HasApiTokens, HasFactory, Notifiable;
 
     protected $table = 'usuarios';
@@ -33,11 +33,28 @@ class User extends Authenticatable
 
     public const TIPO_DIGITADORA_NO_CONFIDENCIAL_RESTRINGIDO = 'NO_CONF_RESTRINGIDO';
 
+    public const TIPO_DIGITADORA_NO_CONFIDENCIAL_CONFIDENCIAL = 'NO_CONF_CONFIDENCIAL';
+
+    public const TIPO_DIGITADORA_CONFIDENCIAL_RESTRINGIDO = 'CONF_RESTRINGIDO';
+
+    public const TIPO_DIGITADORA_TODOS = 'NO_CONF_CONF_RESTR';
+
     public const TIPOS_DIGITADORA = [
         self::TIPO_DIGITADORA_NO_CONFIDENCIAL,
         self::TIPO_DIGITADORA_CONFIDENCIAL,
         self::TIPO_DIGITADORA_RESTRINGIDO,
         self::TIPO_DIGITADORA_NO_CONFIDENCIAL_RESTRINGIDO,
+        self::TIPO_DIGITADORA_NO_CONFIDENCIAL_CONFIDENCIAL,
+        self::TIPO_DIGITADORA_CONFIDENCIAL_RESTRINGIDO,
+        self::TIPO_DIGITADORA_TODOS,
+    ];
+
+    // Tipos que incluyen acceso a patologías confidenciales.
+    public const TIPOS_DIGITADORA_CONFIDENCIAL = [
+        self::TIPO_DIGITADORA_CONFIDENCIAL,
+        self::TIPO_DIGITADORA_NO_CONFIDENCIAL_CONFIDENCIAL,
+        self::TIPO_DIGITADORA_CONFIDENCIAL_RESTRINGIDO,
+        self::TIPO_DIGITADORA_TODOS,
     ];
 
     protected static function booted(): void
@@ -254,7 +271,7 @@ class User extends Authenticatable
         }
 
         return ! $this->hasRole('digitadora')
-            || $this->tipo_digitadora === self::TIPO_DIGITADORA_CONFIDENCIAL;
+            || in_array($this->tipo_digitadora, self::TIPOS_DIGITADORA_CONFIDENCIAL, true);
     }
 
     public function puedeAccederAPatologia(Patologia $patologia): bool
@@ -277,10 +294,10 @@ class User extends Authenticatable
                 ->where('puede_asignar', true));
 
             if ($patologia->confidencial) {
-                $accessQuery->orWhere('tipo_digitadora', self::TIPO_DIGITADORA_CONFIDENCIAL);
+                $accessQuery->orWhereIn('tipo_digitadora', self::TIPOS_DIGITADORA_CONFIDENCIAL);
             }
         })->when($patologia->confidencial, fn (Builder $confidentialQuery) => $confidentialQuery
-            ->where('tipo_digitadora', self::TIPO_DIGITADORA_CONFIDENCIAL))
+            ->whereIn('tipo_digitadora', self::TIPOS_DIGITADORA_CONFIDENCIAL))
             ->when(! $patologia->esRestringida(), fn (Builder $query) => $query->where(function (Builder $typeQuery): void {
                 $typeQuery->whereNull('tipo_digitadora')
                     ->orWhere('tipo_digitadora', '!=', self::TIPO_DIGITADORA_RESTRINGIDO);
@@ -299,7 +316,7 @@ class User extends Authenticatable
     private function tieneAccesoConfidencialPorTipo(Patologia $patologia): bool
     {
         return $this->hasRole('digitadora')
-            && $this->tipo_digitadora === self::TIPO_DIGITADORA_CONFIDENCIAL
+            && in_array($this->tipo_digitadora, self::TIPOS_DIGITADORA_CONFIDENCIAL, true)
             && $patologia->confidencial;
     }
 }

@@ -78,18 +78,23 @@
     function drawChart(elementId, type, labels, values, colors) {
         const canvas = document.getElementById(elementId);
         Chart.getChart(canvas)?.destroy();
+        const verticalLabels = elementId === 'pathology-chart';
         const chart = new Chart(canvas, {
             type,
             data: { labels, datasets: [{ data: values, backgroundColor: colors, borderWidth: 0 }] },
-            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: type !== 'bar', position: 'right' } }, scales: type === 'bar' ? { y: { beginAtZero: true, ticks: { precision: 0 } } } : {} },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: type !== 'bar', position: 'right' } }, scales: type === 'bar' ? { x: verticalLabels ? { ticks: { minRotation: 90, maxRotation: 90, autoSkip: false } } : {}, y: { beginAtZero: true, ticks: { precision: 0 } } } : {} },
         });
         dashboardCharts.push(chart);
     }
 
-    function renderSummary(summary) {
+    function renderSummary(summary, milestones) {
+        const totalHitos = ['pendientes', 'en_proceso', 'completados'].reduce((sum, key) => sum + Number(milestones?.[key] || 0), 0);
+        summary = { ...summary, total_hitos: totalHitos };
+        const destinos = { total_pacientes: '{{ url('/pacientes') }}', total_hitos: '{{ url('/hitos') }}' };
         const cards = [
             ['total_pacientes', 'Pacientes', 'people', 'primary'],
             ['total_registros', 'Registros GES', 'file-earmark-medical', 'dark'],
+            ['total_hitos', 'Hitos', 'list-check', 'secondary'],
             ['registros_pendientes', 'Pendientes', 'hourglass-split', 'warning'],
             ['registros_en_proceso', 'En proceso', 'arrow-repeat', 'info'],
             ['registros_completados', 'Completados', 'check2-circle', 'success'],
@@ -99,7 +104,7 @@
             const isTotalRecords = key === 'total_registros';
             const cardClass = isTotalRecords ? 'ges-total-records-card' : `border-start border-4 border-${color}`;
             const iconClass = isTotalRecords ? 'ges-total-records-card-icon' : `text-${color}`;
-            return `<div class="col-6 col-xl-2"><div class="card shadow-sm h-100 ${cardClass}"><div class="card-body"><div class="small text-muted">${label}</div><div class="d-flex justify-content-between align-items-end"><strong class="fs-2">${escapeHtml(summary[key])}</strong><i class="bi bi-${icon} fs-3 ${iconClass}" aria-hidden="true"></i></div></div></div></div>`;
+            return `<div class="col-6 col-xl"><a class="text-decoration-none text-reset d-block h-100" href="${destinos[key] || '{{ url('/registros-ges') }}'}" aria-label="Ir a ${label}"><div class="card shadow-sm h-100 ${cardClass}" style="cursor:pointer;"><div class="card-body"><div class="small text-muted">${label}</div><div class="d-flex justify-content-between align-items-end"><strong class="fs-2">${escapeHtml(summary[key])}</strong><i class="bi bi-${icon} fs-3 ${iconClass}" aria-hidden="true"></i></div></div></div></a></div>`;
         }).join('');
     }
 
@@ -146,7 +151,7 @@
                 dashboardRefreshPending = true;
                 return;
             }
-            renderSummary(summary);
+            renderSummary(summary, milestones);
             renderTables(load?.data || [], records?.data || []);
             renderMilestones(milestones);
             document.getElementById('complexity-value').textContent = complexity?.promedio ?? '0.0';
