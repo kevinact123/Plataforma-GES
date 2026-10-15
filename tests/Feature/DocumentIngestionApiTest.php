@@ -198,6 +198,33 @@ class DocumentIngestionApiTest extends TestCase
         ]);
     }
 
+    public function test_supervisor_can_ingest_uploaded_document(): void
+    {
+        $role = \App\Models\Rol::create([
+            'nombre' => 'Supervisor',
+            'descripcion' => 'Supervisión y distribución de carga laboral',
+        ]);
+        $this->grantDefaultRolePermissions($role);
+
+        $supervisor = User::create([
+            'nombre' => 'Sofía',
+            'apellido' => 'Supervisora',
+            'username' => 'sofia.supervisora',
+            'password' => bcrypt('password123'),
+            'id_rol' => $role->id_rol,
+            'activo' => true,
+        ]);
+        $archivo = UploadedFile::fake()->createWithContent(
+            'pacientes.csv',
+            "RUT,Nombre\n12345678-9,Juan\n",
+            'text/csv',
+        );
+
+        $this->actingAs($supervisor)
+            ->post('/api/documentacion/ingerir', ['documento' => $archivo])
+            ->assertCreated();
+    }
+
     /**
      * Test: Obtener previsualización de documento
      */

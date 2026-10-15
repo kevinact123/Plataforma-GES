@@ -112,6 +112,7 @@ abstract class TestCase extends BaseTestCase
             ],
             'supervisor' => [
                 'ver_registros',
+                'crear_registros',
                 'eliminar_registros',
                 'asignar_pacientes',
                 'reasignar_pacientes',
